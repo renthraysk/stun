@@ -64,7 +64,7 @@ func (a *Address) Unmarshal(m Message, attr []byte) error {
 
 func appendMappedAddress(m Message, ip net.IP, port uint16) []byte {
 	n := len(ip)
-	m = append(m, byte(attrXorMappedAddress>>8), byte(attrXorMappedAddress),
+	m = append(m, byte(attrMappedAddress>>8), byte(attrMappedAddress),
 		0, byte(4+n), 0, family(n), byte(port>>8), byte(port))
 	m = append(m, ip...)
 	m.SetAttrSize()
