@@ -66,8 +66,9 @@ func appendAttribute(m Message, a attr, b []byte) Message {
 	m = append(m, byte(a>>8), byte(a), byte(n>>8), byte(n))
 	m = append(m, b...)
 	if i := n & 3; i != 0 {
-		return append(m, zeroPad[i:4]...)
+		m = append(m, zeroPad[i:4]...)
 	}
+	m.setAttrSize()
 	return m
 }
 
