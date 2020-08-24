@@ -48,8 +48,7 @@ const (
 )
 
 const (
-	fingerPrintXor        uint32 = 0x5354554e
-	fingerPrintDummyValue uint32 = 0
+	fingerPrintXor uint32 = 0x5354554e
 )
 
 var (
@@ -72,7 +71,7 @@ func appendAttribute(m Message, a attr, b []byte) Message {
 	return m
 }
 
-func appendAttributeString(m Message, a attr, s string) []byte {
+func appendAttributeString(m Message, a attr, s string) Message {
 	n := len(s)
 	m = append(m, byte(a>>8), byte(a), byte(n>>8), byte(n))
 	m = append(m, s...)
@@ -89,21 +88,21 @@ func appendAttributeUint32(m Message, a attr, x uint32) Message {
 	return m
 }
 
-func appendSoftware(m []byte, s string) []byte {
+func appendSoftware(m Message, s string) Message {
 	return appendAttributeString(m, attrSoftware, s)
 }
 
-func appendFingerprint(m Message) []byte {
-	m = appendAttributeUint32(m, attrFingerprint, fingerPrintDummyValue)
+func appendFingerprint(m Message) Message {
+	m = appendAttributeUint32(m, attrFingerprint, 0)
 	binary.BigEndian.PutUint32(m[len(m)-4:], crc32.ChecksumIEEE(m)^fingerPrintXor)
 	return m
 }
 
-func appendRealm(m []byte, r string) []byte {
+func appendRealm(m Message, r string) Message {
 	return appendAttributeString(m, attrRealm, r)
 }
 
-func appendNonce(m, nonce []byte) []byte {
+func appendNonce(m Message, nonce []byte) Message {
 	return appendAttribute(m, attrNonce, nonce)
 }
 
