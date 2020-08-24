@@ -67,7 +67,7 @@ func appendMappedAddress(m Message, ip net.IP, port uint16) []byte {
 	m = append(m, byte(attrMappedAddress>>8), byte(attrMappedAddress),
 		0, byte(4+n), 0, family(n), byte(port>>8), byte(port))
 	m = append(m, ip...)
-	m.SetAttrSize()
+	m.setAttrSize()
 	return m
 }
 
@@ -81,6 +81,6 @@ func appendXorMappedAddress(m Message, ip net.IP, port uint16) []byte {
 	for i, x := range ip {
 		s[i] ^= x
 	}
-	m.SetAttrSize()
+	m.setAttrSize()
 	return m
 }

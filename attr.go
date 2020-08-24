@@ -78,13 +78,13 @@ func appendAttributeString(m Message, a attr, s string) Message {
 	if i := n & 3; i != 0 {
 		m = append(m, zeroPad[i:4]...)
 	}
-	m.SetAttrSize()
+	m.setAttrSize()
 	return m
 }
 
 func appendAttributeUint32(m Message, a attr, x uint32) Message {
 	m = append(m, byte(a>>8), byte(a), 0, 4, byte(x>>24), byte(x>>16), byte(x>>8), byte(x))
-	m.SetAttrSize()
+	m.setAttrSize()
 	return m
 }
 
@@ -111,7 +111,7 @@ func appendHMAC(m Message, a attr, h func() hash.Hash, key []byte) Message {
 	n := mac.Size()
 	m = append(m, byte(a>>8), byte(a), byte(n>>8), byte(n))
 	m = append(m, zeroPad[:n]...)
-	m.SetAttrSize()
+	m.setAttrSize()
 	mac.Write(m)
 	return mac.Sum(m[:len(m)-n])
 }

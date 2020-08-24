@@ -13,7 +13,7 @@ type Message []byte
 
 func (m Message) Type() Type              { return Type(binary.BigEndian.Uint16(m[:2])) }
 func (m Message) AttrSize() int           { return int(binary.BigEndian.Uint16(m[2:4])) }
-func (m Message) SetAttrSize()            { binary.BigEndian.PutUint16(m[2:4], uint16(len(m)-headerSize)) }
+func (m Message) setAttrSize()            { binary.BigEndian.PutUint16(m[2:4], uint16(len(m)-headerSize)) }
 func (m Message) TxID() (t TxID)          { copy(t[:], m[8:]); return }
 func (m Message) cookieTxID(n int) []byte { return m[4 : 4+n] }
 
