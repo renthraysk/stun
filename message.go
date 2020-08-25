@@ -33,6 +33,9 @@ func attrSize(a []byte) int  { return int(uint(binary.BigEndian.Uint16(a[2:4])))
 var key = []byte{31: 0}
 
 func Parse(in []byte) (Message, error) {
+
+	const attrFingerprintSize = 8
+
 	if len(in) < headerSize {
 		return nil, ErrNotASTUNMessage
 	}
@@ -68,36 +71,42 @@ func Parse(in []byte) (Message, error) {
 			}
 
 		case attrFingerprint:
-			// len(attr) == 8 when last attribute
-			if s != 4 || len(attr) != 8 || !validateFingerprint(in[:n], attr[:8]) {
+			// len(attr) == attrFingerprintSize when last attribute which fingerprint attribute must be
+			if s != 4 || len(attr) != attrFingerprintSize || !validateFingerprint(in[:n], attr[:8]) {
 				return nil, ErrFingerprint
 			}
 
 		case attrMessageIntegrity:
-			if s != sha1.Size || len(attr) < 4+sha1.Size {
+			const attrMessageIntegritySize = 4 + sha1.Size
+
+			if s != sha1.Size || len(attr) < attrMessageIntegritySize {
 				return nil, ErrMessageIntegrity
 			}
-			if len(attr) > 4+sha1.Size {
-				if a := attr[4+sha1.Size:]; len(a) < 8 || attrType(a) != attrFingerprint || attrSize(a) != 4 {
+			if len(attr) > attrMessageIntegritySize {
+				// Only fingerprint attribute is allowed to follow messageintegrity attribute
+				if a := attr[4+sha1.Size:]; len(a) < attrFingerprintSize || attrType(a) != attrFingerprint {
 					return nil, ErrMessageIntegrity
 				}
-				in = in[:n+4+sha1.Size+8] // ignore everything after mac+fingerprint
-				attr = attr[:4+sha1.Size]
+				in = in[:n+attrMessageIntegritySize+attrFingerprintSize] // ignore everything after messageintegrity and fingerprint attributes
+				attr = attr[:attrMessageIntegritySize]
 			}
 			if !validateHMAC(in[:n], attr, sha1.New, key) {
 				return nil, ErrMessageIntegrity
 			}
 
 		case attrMessageIntegritySHA256:
-			if s != sha256.Size || len(attr) < 4+sha256.Size {
+			const attrMessageIntegritySHA256Size = 4 + sha256.Size
+
+			if s != sha256.Size || len(attr) < attrMessageIntegritySHA256Size {
 				return nil, ErrMessageIntegritySHA256
 			}
-			if len(attr) > 4+sha256.Size {
-				if a := attr[4+sha256.Size:]; len(a) < 8 || attrType(a) != attrFingerprint || attrSize(a) != 4 {
+			if len(attr) > attrMessageIntegritySHA256Size {
+				// Only fingerprint attribute is allowed to follow messageintegritysha256 attribute
+				if a := attr[attrMessageIntegritySHA256Size:]; len(a) < attrFingerprintSize || attrType(a) != attrFingerprint {
 					return nil, ErrMessageIntegritySHA256
 				}
-				in = in[:n+4+sha256.Size+8] // ignore everything after mac+fingerprint
-				attr = attr[:4+sha256.Size]
+				in = in[:n+attrMessageIntegritySHA256Size+attrFingerprintSize] // ignore everything after messageintegritysha256 and fingerprint attributes
+				attr = attr[:attrMessageIntegritySHA256Size]
 			}
 			if !validateHMAC(in[:n], attr, sha256.New, key) {
 				return nil, ErrMessageIntegritySHA256
