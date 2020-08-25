@@ -72,7 +72,7 @@ func Parse(in []byte) (Message, error) {
 
 		case attrFingerprint:
 			// len(attr) == attrFingerprintSize when last attribute which fingerprint attribute must be
-			if s != 4 || len(attr) != attrFingerprintSize || !validateFingerprint(in[:n], attr[:8]) {
+			if s != 4 || len(attr) != attrFingerprintSize || !validateFingerprint(in[:n], attr[:attrFingerprintSize]) {
 				return nil, ErrFingerprint
 			}
 
