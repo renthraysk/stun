@@ -65,9 +65,9 @@ func bindingRequest(ctx context.Context, conn *net.UDPConn) error {
 	if err != nil {
 		return err
 	}
-	m, ok := stun.Parse(b[:n:n])
-	if ok {
+	m, err := stun.Parse(b[:n:n])
+	if err == nil {
 		_ = m
 	}
-	return nil
+	return err
 }
