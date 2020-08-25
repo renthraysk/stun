@@ -9,6 +9,16 @@ import (
 	"hash/crc32"
 )
 
+const (
+	ErrMalformedAttribute     = errorString("malformed attribute")
+	ErrNotASTUNMessage        = errorString("not a stun message")
+	ErrFingerprint            = errorString("fingerprint check failed")
+	ErrMessageIntegrity       = errorString("messageintegrity check failed")
+	ErrMessageIntegritySHA256 = errorString("messageintegritysha256 check failed")
+
+	ErrUnknownPasswordAlgorithm = errorString("unknown password algorithm")
+)
+
 type Message []byte
 
 func (m Message) Type() Type              { return Type(binary.BigEndian.Uint16(m[:2])) }
@@ -22,21 +32,21 @@ func attrSize(a []byte) int  { return int(uint(binary.BigEndian.Uint16(a[2:4])))
 
 var key = []byte{31: 0}
 
-func Parse(in []byte) (Message, bool) {
+func Parse(in []byte) (Message, error) {
 	if len(in) < headerSize {
-		return nil, false
+		return nil, ErrNotASTUNMessage
 	}
 	// Top two bits must be 0
 	if in[0] > 0x3F {
-		return nil, false
+		return nil, ErrNotASTUNMessage
 	}
 	// Magic Cookie
 	if binary.BigEndian.Uint32(in[4:8]) != magicCookie {
-		return nil, false
+		return nil, ErrNotASTUNMessage
 	}
 	// Size
 	if int(binary.BigEndian.Uint16(in[2:4]))+headerSize != len(in) {
-		return nil, false
+		return nil, ErrNotASTUNMessage
 	}
 
 	n := headerSize // number of bytes parsed
@@ -48,59 +58,55 @@ func Parse(in []byte) (Message, bool) {
 
 		case attrPasswordAlgorithms:
 			if s != 4 || binary.BigEndian.Uint16(attr[6:8]) != 0 {
-				return nil, false
+				return nil, ErrUnknownPasswordAlgorithm
 			}
 			switch binary.BigEndian.Uint16(attr[4:6]) {
-			case 0x0000:
-				return nil, false
 			case passwordAlgorithmMD5:
 			case passwordAlgorithmSHA256:
 			default:
-				return nil, false
+				return nil, ErrUnknownPasswordAlgorithm
 			}
 
 		case attrFingerprint:
 			// len(attr) == 8 when last attribute
 			if s != 4 || len(attr) != 8 || !validateFingerprint(in[:n], attr[:8]) {
-				return nil, false
+				return nil, ErrFingerprint
 			}
 
 		case attrMessageIntegrity:
 			if s != sha1.Size || len(attr) < 4+sha1.Size {
-				return nil, false
+				return nil, ErrMessageIntegrity
 			}
 			if len(attr) > 4+sha1.Size {
 				if a := attr[4+sha1.Size:]; len(a) < 8 || attrType(a) != attrFingerprint || attrSize(a) != 4 {
-					return nil, false
+					return nil, ErrMessageIntegrity
 				}
 				in = in[:n+4+sha1.Size+8] // ignore everything after mac+fingerprint
 				attr = attr[:4+sha1.Size]
 			}
 			if !validateHMAC(in[:n], attr, sha1.New, key) {
-				return nil, false
+				return nil, ErrMessageIntegrity
 			}
 
 		case attrMessageIntegritySHA256:
 			if s != sha256.Size || len(attr) < 4+sha256.Size {
-				return nil, false
+				return nil, ErrMessageIntegritySHA256
 			}
 			if len(attr) > 4+sha256.Size {
 				if a := attr[4+sha256.Size:]; len(a) < 8 || attrType(a) != attrFingerprint || attrSize(a) != 4 {
-					return nil, false
+					return nil, ErrMessageIntegritySHA256
 				}
 				in = in[:n+4+sha256.Size+8] // ignore everything after mac+fingerprint
 				attr = attr[:4+sha256.Size]
 			}
 			if !validateHMAC(in[:n], attr, sha256.New, key) {
-				return nil, false
+				return nil, ErrMessageIntegritySHA256
 			}
 		}
 		n += (s + 7) &^ 3
 	}
-	if n != len(in) {
-		return nil, false
-	}
-	return Message(in), true
+	//
+	return Message(in), nil
 }
 
 // validateFingerprint is called when fingerprint attribute is encountered.

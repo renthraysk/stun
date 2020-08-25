@@ -9,8 +9,6 @@ type errorString string
 
 func (e errorString) Error() string { return string(e) }
 
-const ErrMalformedAttribute = errorString("malformed attribute")
-
 const (
 	headerSize = 20
 
@@ -45,8 +43,8 @@ func Serve(pc net.PacketConn) {
 		if err != nil {
 			continue
 		}
-		m, ok := Parse(buf[:n:n])
-		if !ok {
+		m, err := Parse(buf[:n:n])
+		if err != nil {
 			continue
 		}
 		switch m.Type() {

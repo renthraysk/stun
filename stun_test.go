@@ -10,17 +10,17 @@ func TestFingerprint(t *testing.T) {
 	m := newHeader(nil, TypeBindingRequest, txID)
 	m = appendFingerprint(m)
 
-	if _, ok := Parse(m); !ok {
+	if _, err := Parse(m); err != nil {
 		t.Fatalf("failed")
 	}
 	m[0] ^= 0x01
-	if _, ok := Parse(m); ok {
+	if _, err := Parse(m); err == nil {
 		t.Fatalf("expected failure")
 	}
 	// Reset first byte and muggle last byte of header
 	m[0] ^= 0x01
 	m[headerSize-1] ^= 0x01
-	if _, ok := Parse(m); ok {
+	if _, err := Parse(m); err == nil {
 		t.Fatalf("expected failure")
 	}
 }
@@ -28,17 +28,17 @@ func TestFingerprint(t *testing.T) {
 func TestMessageIntegrity(t *testing.T) {
 	m := newHeader(nil, TypeBindingRequest, txID)
 	m = appendMessageIntegrity(m, key)
-	if _, ok := Parse(m); !ok {
+	if _, err := Parse(m); err != nil {
 		t.Fatalf("failed")
 	}
 	m[0] ^= 0x01
-	if _, ok := Parse(m); ok {
+	if _, err := Parse(m); err == nil {
 		t.Fatalf("expected failure")
 	}
 	// Reset first byte and muggle last byte of header
 	m[0] ^= 0x01
 	m[headerSize-1] ^= 0x01
-	if _, ok := Parse(m); ok {
+	if _, err := Parse(m); err == nil {
 		t.Fatalf("expected failure")
 	}
 }
@@ -48,13 +48,13 @@ func TestMessageIntegritySHA256(t *testing.T) {
 	m = appendMessageIntegritySHA256(m, key)
 
 	m[0] ^= 0x01
-	if _, ok := Parse(m); ok {
+	if _, err := Parse(m); err == nil {
 		t.Fatalf("expected failure")
 	}
 	// Reset first byte and muggle last byte of header
 	m[0] ^= 0x01
 	m[headerSize-1] ^= 0x01
-	if _, ok := Parse(m); ok {
+	if _, err := Parse(m); err == nil {
 		t.Fatalf("expected failure")
 	}
 }
@@ -64,7 +64,7 @@ func TestMessageIntegritySoftware(t *testing.T) {
 	m := newHeader(nil, TypeBindingRequest, txID)
 	m = appendMessageIntegrity(m, key)
 	m = appendSoftware(m, "test")
-	if _, ok := Parse(m); ok {
+	if _, err := Parse(m); err == nil {
 		t.Fatalf("expected failure")
 	}
 }
@@ -74,7 +74,7 @@ func TestMessageIntegritySHA256Software(t *testing.T) {
 	m := newHeader(nil, TypeBindingRequest, txID)
 	m = appendMessageIntegritySHA256(m, key)
 	m = appendSoftware(m, "test")
-	if _, ok := Parse(m); ok {
+	if _, err := Parse(m); err == nil {
 		t.Fatalf("expected failure")
 	}
 }
@@ -84,7 +84,7 @@ func TestFingerprintMessageIntegritySHA256(t *testing.T) {
 	m := newHeader(nil, TypeBindingRequest, txID)
 	m = appendFingerprint(m)
 	m = appendMessageIntegritySHA256(m, key)
-	if _, ok := Parse(m); ok {
+	if _, err := Parse(m); err == nil {
 		t.Fatalf("expected failure")
 	}
 }
