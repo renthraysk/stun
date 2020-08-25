@@ -11,8 +11,6 @@ import (
 
 type attr uint16
 
-//go:generate stringer -type attr -trimprefix attr
-
 const (
 	attrMappedAddress          attr = 0x0001
 	attrUsername               attr = 0x0006
@@ -117,10 +115,10 @@ func appendHMAC(m Message, a attr, h func() hash.Hash, key []byte) Message {
 	return mac.Sum(m[:len(m)-n])
 }
 
-func appendMessageIntegrity(m, key []byte) []byte {
+func appendMessageIntegrity(m Message, key []byte) Message {
 	return appendHMAC(m, attrMessageIntegrity, sha1.New, key)
 }
 
-func appendMessageIntegritySHA256(m, key []byte) []byte {
+func appendMessageIntegritySHA256(m Message, key []byte) Message {
 	return appendHMAC(m, attrMessageIntegritySHA256, sha256.New, key)
 }
