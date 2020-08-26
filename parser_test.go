@@ -33,7 +33,7 @@ func TestRFC5769(t *testing.T) {
 	}
 }
 
-func TestFingerprint(t *testing.T) {
+func TestParseFingerprint(t *testing.T) {
 
 	b := New(TypeBindingRequest, txID)
 	b.AppendFingerprint()
@@ -57,7 +57,7 @@ func TestFingerprint(t *testing.T) {
 	}
 }
 
-func TestMessageIntegrity(t *testing.T) {
+func TestParseMessageIntegrity(t *testing.T) {
 
 	b := New(TypeBindingRequest, txID)
 	b.AppendMessageIntegrity(key)
@@ -81,7 +81,7 @@ func TestMessageIntegrity(t *testing.T) {
 	}
 }
 
-func TestMessageIntegritySHA256(t *testing.T) {
+func TestParseMessageIntegritySHA256(t *testing.T) {
 	b := New(TypeBindingRequest, txID)
 	b.AppendMessageIntegritySHA256(key)
 	m, err := b.Bytes()
@@ -104,7 +104,7 @@ func TestMessageIntegritySHA256(t *testing.T) {
 	}
 }
 
-func TestMessageIntegritySHA256Fingerprint(t *testing.T) {
+func TestParseMessageIntegritySHA256Fingerprint(t *testing.T) {
 	b := New(TypeBindingRequest, txID)
 	b.AppendMessageIntegritySHA256(key)
 	b.AppendFingerprint()
@@ -128,7 +128,30 @@ func TestMessageIntegritySHA256Fingerprint(t *testing.T) {
 	}
 }
 
-func TestMessageIntegrityShouldBeOnlyFollowedByFingerprint(t *testing.T) {
+func TestParseMessageIntegrityFingerprint(t *testing.T) {
+	// Only attribute allowed after a MessageIntegrity is Fingerprint
+	m := newHeader(nil, TypeBindingRequest, txID)
+	m = appendMessageIntegrity(m, key)
+	m = appendFingerprint(m)
+	setAttrSize(m)
+
+	if _, err := Parse(m); err != nil {
+		t.Fatalf("parse failed: %v", err)
+	}
+}
+func TestParseMessageIntegrityMessageIntegrity256Fingerprint(t *testing.T) {
+	// Only attribute allowed after a MessageIntegrity is Fingerprint
+	m := newHeader(nil, TypeBindingRequest, txID)
+	m = appendMessageIntegrity(m, key)
+	m = appendMessageIntegritySHA256(m, key, sha256.Size)
+	setAttrSize(m)
+
+	if _, err := Parse(m); err != ErrMessageIntegrity {
+		t.Fatal("expected ErrMessageIntegrity err")
+	}
+}
+
+func TestParseMessageIntegrityShouldBeOnlyFollowedByFingerprint(t *testing.T) {
 	// Only attribute allowed after a MessageIntegrity is Fingerprint
 	m := newHeader(nil, TypeBindingRequest, txID)
 	m = appendMessageIntegrity(m, key)
@@ -140,7 +163,7 @@ func TestMessageIntegrityShouldBeOnlyFollowedByFingerprint(t *testing.T) {
 	}
 }
 
-func TestMessageIntegritySHA256ShouldBeOnlyFollowedByFingerprint(t *testing.T) {
+func TestParseMessageIntegritySHA256ShouldBeOnlyFollowedByFingerprint(t *testing.T) {
 	// Only attribute allowed after a MessageIntegritySHA256 is Fingerprint
 	m := newHeader(nil, TypeBindingRequest, txID)
 	m = appendMessageIntegritySHA256(m, key, sha256.Size)
@@ -152,7 +175,7 @@ func TestMessageIntegritySHA256ShouldBeOnlyFollowedByFingerprint(t *testing.T) {
 	}
 }
 
-func TestFingerprintShouldBeLastAttribute(t *testing.T) {
+func TestParseFingerprintShouldBeLastAttribute(t *testing.T) {
 	// Fingerprint should be last attribute
 	m := newHeader(nil, TypeBindingRequest, txID)
 	m = appendFingerprint(m)
@@ -164,7 +187,7 @@ func TestFingerprintShouldBeLastAttribute(t *testing.T) {
 	}
 }
 
-func BenchmarkMessageFingerprint(b *testing.B) {
+func BenchmarkParseMessageFingerprint(b *testing.B) {
 	bb := New(TypeBindingRequest, txID)
 	bb.AppendFingerprint()
 	m, err := bb.Bytes()
@@ -178,7 +201,7 @@ func BenchmarkMessageFingerprint(b *testing.B) {
 	}
 }
 
-func BenchmarkMessageIntegrity(b *testing.B) {
+func BenchmarkParseMessageIntegrity(b *testing.B) {
 	bb := New(TypeBindingRequest, txID)
 	bb.AppendMessageIntegrity(key)
 	m, err := bb.Bytes()
@@ -192,7 +215,7 @@ func BenchmarkMessageIntegrity(b *testing.B) {
 	}
 }
 
-func BenchmarkMessageIntegritySHA256(b *testing.B) {
+func BenchmarkParseMessageIntegritySHA256(b *testing.B) {
 	bb := New(TypeBindingRequest, txID)
 	bb.AppendMessageIntegritySHA256(key)
 	m, err := bb.Bytes()
