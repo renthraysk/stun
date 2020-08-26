@@ -2,7 +2,6 @@ package stun
 
 import (
 	"crypto/rand"
-	"crypto/sha256"
 	"net"
 )
 
@@ -60,12 +59,4 @@ func BindingRequest(buf []byte, software string) ([]byte, error) {
 	b := New(TypeBindingRequest, txID)
 	b.AppendSoftware(software)
 	return b.Bytes()
-}
-
-func UserHash(b, name, realm []byte) []byte {
-	h := sha256.New()
-	h.Write(name)
-	h.Write([]byte{':'})
-	h.Write(realm)
-	return h.Sum(b)
 }

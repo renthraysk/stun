@@ -107,19 +107,22 @@ func appendUserHash(m []byte, userhash []byte) []byte {
 	return appendAttribute(m, attrUserHash, userhash)
 }
 
-func appendHMAC(m []byte, a attr, h func() hash.Hash, key []byte) []byte {
+func appendHMAC(m []byte, a attr, h func() hash.Hash, key []byte, n int) []byte {
 	mac := hmac.New(h, key)
-	n := mac.Size()
 	binary.BigEndian.PutUint16(m[2:4], uint16(len(m)-headerSize+4+n))
 	mac.Write(m)
 	m = append(m, byte(a>>8), byte(a), byte(n>>8), byte(n))
-	return mac.Sum(m)
+	if n == mac.Size() {
+		return mac.Sum(m)
+	}
+	x := mac.Sum(nil)
+	return append(m, x[:n]...)
 }
 
 func appendMessageIntegrity(m []byte, key []byte) []byte {
-	return appendHMAC(m, attrMessageIntegrity, sha1.New, key)
+	return appendHMAC(m, attrMessageIntegrity, sha1.New, key, sha1.Size)
 }
 
-func appendMessageIntegritySHA256(m []byte, key []byte) []byte {
-	return appendHMAC(m, attrMessageIntegritySHA256, sha256.New, key)
+func appendMessageIntegritySHA256(m []byte, key []byte, n int) []byte {
+	return appendHMAC(m, attrMessageIntegritySHA256, sha256.New, key, n)
 }

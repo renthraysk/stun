@@ -1,11 +1,7 @@
 package stun
 
 import (
-	"bytes"
-	"crypto/md5"
 	"crypto/sha256"
-	"encoding/hex"
-	"os"
 	"testing"
 )
 
@@ -35,54 +31,6 @@ func TestRFC5769(t *testing.T) {
 	if err != nil {
 		t.Fatalf("parse failed: %v", err)
 	}
-
-}
-
-func TestRFC8489VectorB1(t *testing.T) {
-
-	const (
-		username = "\u30DE\u30C8\u30EA\u30C3\u30AF\u30B9"
-		nonce    = "obMatJos2AAACf//499k954d6OL34oL9FSTvy64sA"
-		realm    = "example.org"
-	)
-
-	txID := [12]byte{
-		0x78, 0xAD, 0x34, 0x33,
-		0xC6, 0xAD, 0x72, 0xC0,
-		0x29, 0xDA, 0x41, 0x2E,
-	}
-
-	userHashX := []byte{
-		0x4a, 0x3c, 0xf3, 0x8f,
-		0xef, 0x69, 0x92, 0xbd,
-		0xa9, 0x52, 0xc6, 0x78,
-		0x04, 0x17, 0xda, 0x0f,
-		0x24, 0x81, 0x94, 0x15,
-		0x56, 0x9e, 0x60, 0xb2,
-		0x05, 0xc4, 0x6e, 0x41,
-		0x40, 0x7f, 0x17, 0x04,
-	}
-
-	userHash := UserHash(make([]byte, 0, sha256.Size), []byte(username), []byte(realm))
-	if !bytes.Equal(userHash, userHashX) {
-		t.Fatal("failed to create userhash")
-	}
-
-	key := md5.Sum([]byte(username + ":" + realm + ":" + "TheMatrIX"))
-
-	b := New(TypeBindingRequest, txID)
-	b.AppendUserHash(userHash)
-	b.AppendNonce([]byte(nonce))
-	b.AppendRealm(realm)
-	b.AppendMessageIntegritySHA256(key[:])
-	r, err := b.Bytes()
-	if err != nil {
-		t.Fatalf("build failed: %v", err)
-	}
-	w := hex.Dumper(os.Stdout)
-	w.Write(r)
-	w.Close()
-
 }
 
 func TestFingerprint(t *testing.T) {
@@ -195,7 +143,7 @@ func TestMessageIntegrityShouldBeOnlyFollowedByFingerprint(t *testing.T) {
 func TestMessageIntegritySHA256ShouldBeOnlyFollowedByFingerprint(t *testing.T) {
 	// Only attribute allowed after a MessageIntegritySHA256 is Fingerprint
 	m := newHeader(nil, TypeBindingRequest, txID)
-	m = appendMessageIntegritySHA256(m, key)
+	m = appendMessageIntegritySHA256(m, key, sha256.Size)
 	m = appendSoftware(m, "test")
 	setAttrSize(m)
 
@@ -208,7 +156,7 @@ func TestFingerprintShouldBeLastAttribute(t *testing.T) {
 	// Fingerprint should be last attribute
 	m := newHeader(nil, TypeBindingRequest, txID)
 	m = appendFingerprint(m)
-	m = appendMessageIntegritySHA256(m, key)
+	m = appendMessageIntegritySHA256(m, key, sha256.Size)
 	setAttrSize(m)
 
 	if _, err := Parse(m); err == nil {
