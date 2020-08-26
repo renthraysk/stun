@@ -9,6 +9,11 @@ import (
 	"hash/crc32"
 )
 
+/*
+	Low level attribute appenders.
+	These do not apply any validation to inputs, so can be used to generate malformed messages for testing Parse().
+*/
+
 type attr uint16
 
 const (

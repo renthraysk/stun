@@ -1,7 +1,6 @@
 package stun
 
 import (
-	"crypto/rand"
 	"net"
 )
 
@@ -49,14 +48,4 @@ func Serve(pc net.PacketConn) {
 			}
 		}
 	}
-}
-
-func BindingRequest(buf []byte, software string) ([]byte, error) {
-	var txID TxID
-	if _, err := rand.Read(txID[:]); err != nil {
-		return nil, err
-	}
-	b := New(TypeBindingRequest, txID)
-	b.AppendSoftware(software)
-	return b.Bytes()
 }

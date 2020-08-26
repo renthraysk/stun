@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"crypto/rand"
 	"flag"
 	"log"
 	"net"
@@ -48,9 +49,15 @@ func main() {
 }
 
 func bindingRequest(ctx context.Context, conn *net.UDPConn) error {
-	var b [1280]byte
+	var in [1280]byte
+	var txID stun.TxID
 
-	r, err := stun.BindingRequest(b[:0], "test")
+	if _, err := rand.Read(txID[:]); err != nil {
+		return err
+	}
+	b := stun.New(stun.TypeBindingRequest, txID)
+	b.AppendSoftware("test")
+	r, err := b.Bytes()
 	if err != nil {
 		return err
 	}
@@ -61,11 +68,11 @@ func bindingRequest(ctx context.Context, conn *net.UDPConn) error {
 	if err := conn.SetReadDeadline(deadline); err != nil {
 		return err
 	}
-	n, _, err := conn.ReadFrom(b[:])
+	n, _, err := conn.ReadFrom(in[:])
 	if err != nil {
 		return err
 	}
-	m, err := stun.Parse(b[:n:n])
+	m, err := stun.Parse(in[:n:n])
 	if err == nil {
 		_ = m
 	}
