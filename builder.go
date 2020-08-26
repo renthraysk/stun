@@ -22,7 +22,7 @@ const (
 
 const (
 	ErrAttrInvalidAttributeAppend          = errorString("invalid attribute appended after MessageIntegrity, MessageIntegritySHA256 or Fingerprint")
-	ErrInvalidMessageIntegritySHA256Length = errorString("invalid truncated MessageIntegritySHA256 length")
+	ErrInvalidMessageIntegritySHA256Length = errorString("invalid MessageIntegritySHA256 length")
 )
 
 type Builder struct {

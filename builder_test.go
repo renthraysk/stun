@@ -57,12 +57,12 @@ func TestBuilderTruncatedMessageIntegritySHA256(t *testing.T) {
 		err error
 	}{
 		{n: 0, err: ErrInvalidMessageIntegritySHA256Length},
-		{n: 15, err: ErrInvalidMessageIntegritySHA256Length},
-		{n: 16, err: nil},
-		{n: 17, err: ErrInvalidMessageIntegritySHA256Length},
-		{n: 20, err: nil},
-		{n: 32, err: nil},
-		{n: 33, err: ErrInvalidMessageIntegritySHA256Length},
+		{n: 15, err: ErrInvalidMessageIntegritySHA256Length}, // below minimum
+		{n: 16, err: nil}, // minimum length
+		{n: 17, err: ErrInvalidMessageIntegritySHA256Length}, // not multiple of 4
+		{n: 20, err: nil}, // above minimum, and multiple of 4
+		{n: 32, err: nil}, // full sized
+		{n: 33, err: ErrInvalidMessageIntegritySHA256Length}, // oversized
 	}
 
 	for _, tt := range tests {
