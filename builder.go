@@ -61,12 +61,7 @@ func (b *Builder) AppendMessageIntegrity(key []byte) {
 }
 
 func (b *Builder) AppendMessageIntegritySHA256(key []byte) {
-	if b.state < stMessageIntegritySHA256 {
-		b.state = stMessageIntegritySHA256
-		b.msg = appendMessageIntegritySHA256(b.msg, key, sha256.Size)
-	} else if b.state < stErrInvalidAttributeAppend {
-		b.state = stErrInvalidAttributeAppend
-	}
+	b.AppendMessageIntegritySHA256Truncated(key, sha256.Size)
 }
 
 func (b *Builder) AppendMessageIntegritySHA256Truncated(key []byte, n int) {
