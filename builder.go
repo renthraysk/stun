@@ -29,6 +29,7 @@ const (
 	stErrSoftwareTooLong
 	stErrRealmTooLong
 	stErrNonceTooLong
+	stErrInvalidUserHashLength
 )
 
 type Builder struct {
@@ -155,6 +156,10 @@ func (b *Builder) AppendNonce(nonce []byte) {
 
 func (b *Builder) AppendUserHash(userHash []byte) {
 	if b.state == stOpen {
+		if len(userHash) != sha256.Size {
+			b.state = stErrInvalidUserHashLength
+			return
+		}
 		b.msg = appendUserHash(b.msg, userHash)
 	} else if b.state < stErrInvalidAttributeAppend {
 		b.state = stErrInvalidAttributeAppend
@@ -180,6 +185,9 @@ func (b *Builder) Bytes() ([]byte, error) {
 		return nil, ErrRealmTooLong
 	case stErrNonceTooLong:
 		return nil, ErrNonceTooLong
+	case stErrInvalidUserHashLength:
+		return nil, ErrInvalidUserHashLength
+
 	}
 	panic("Unreachable")
 }
