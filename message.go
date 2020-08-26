@@ -135,7 +135,7 @@ func validateFingerprint(m []byte, a []byte) bool {
 	return crc32.ChecksumIEEE(m)^binary.BigEndian.Uint32(a) == fingerprintXor
 }
 
-// validateHMAC is called when either MessageInterity or MessageIntegritySHA256 attribute is encountered.
+// validateHMAC is called when either MessageIntegrity or MessageIntegritySHA256 attribute is encountered.
 // m slice spans the STUN message header plus all currently parsed attributes
 // a slice spans the MessageIntegrity/SHA256 attribute
 func validateHMAC(m []byte, a []byte, h func() hash.Hash, key []byte) bool {
