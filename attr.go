@@ -117,11 +117,11 @@ func appendHMAC(m []byte, a attr, h func() hash.Hash, key []byte, n int) []byte 
 	binary.BigEndian.PutUint16(m[2:4], uint16(len(m)-headerSize+4+n))
 	mac.Write(m)
 	m = append(m, byte(a>>8), byte(a), byte(n>>8), byte(n))
-	if n == mac.Size() {
-		return mac.Sum(m)
+	m = mac.Sum(m)
+	if n < mac.Size() {
+		return m[:len(m)-mac.Size()+n]
 	}
-	x := mac.Sum(nil)
-	return append(m, x[:n]...)
+	return m
 }
 
 func appendMessageIntegrity(m []byte, key []byte) []byte {
