@@ -9,8 +9,8 @@ func TestBuilderAttributesAfterFingerprint(t *testing.T) {
 	b := New(TypeBindingRequest, testTxID)
 	b.AppendFingerprint()
 	b.AppendSoftware("test")
-	if _, err := b.Bytes(); err != ErrAttrAppendedAfterMessageIntegrity {
-		t.Fatalf("expected ErrAttrAppendedAfterMessageIntegrity got %v", err)
+	if _, err := b.Bytes(); err != ErrAttrInvalidAttributeAppend {
+		t.Fatalf("expected ErrAttrInvalidAttributeAppend got %v", err)
 	}
 }
 
@@ -18,8 +18,8 @@ func TestBuilderAttributesAfterMessageIntegrity(t *testing.T) {
 	b := New(TypeBindingRequest, testTxID)
 	b.AppendMessageIntegrity(testKey)
 	b.AppendSoftware("test")
-	if _, err := b.Bytes(); err != ErrAttrAppendedAfterMessageIntegrity {
-		t.Fatalf("expected ErrAttrAppendedAfterMessageIntegrity got %v", err)
+	if _, err := b.Bytes(); err != ErrAttrInvalidAttributeAppend {
+		t.Fatalf("expected ErrAttrInvalidAttributeAppend got %v", err)
 	}
 }
 
@@ -27,8 +27,8 @@ func TestBuilderAttributesAfterMessageIntegritySHA256(t *testing.T) {
 	b := New(TypeBindingRequest, testTxID)
 	b.AppendMessageIntegritySHA256(testKey)
 	b.AppendSoftware("test")
-	if _, err := b.Bytes(); err != ErrAttrAppendedAfterMessageIntegrity {
-		t.Fatalf("expected ErrAttrAppendedAfterMessageIntegrity got %v", err)
+	if _, err := b.Bytes(); err != ErrAttrInvalidAttributeAppend {
+		t.Fatalf("expected ErrAttrInvalidAttributeAppend got %v", err)
 	}
 }
 
@@ -36,8 +36,8 @@ func TestBuilderMessageIntegrityAfterMessageIntegritySHA256(t *testing.T) {
 	b := New(TypeBindingRequest, testTxID)
 	b.AppendMessageIntegritySHA256(testKey)
 	b.AppendMessageIntegrity(testKey)
-	if _, err := b.Bytes(); err != ErrAttrAppendedAfterMessageIntegrity {
-		t.Fatalf("expected ErrAttrAppendedAfterMessageIntegrity got %v", err)
+	if _, err := b.Bytes(); err != ErrAttrInvalidAttributeAppend {
+		t.Fatalf("expected ErrAttrInvalidAttributeAppend got %v", err)
 	}
 }
 
