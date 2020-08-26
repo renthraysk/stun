@@ -51,7 +51,7 @@ func (a *Address) Unmarshal(m Message, attr []byte) error {
 	a.Port = binary.BigEndian.Uint16(attr[6:8])
 	switch attrType(attr) {
 	case attrXorMappedAddress:
-		for i, x := range m.cookieTxID(n) {
+		for i, x := range m[4 : 4+n] { // m[4:4+n] spans magiccookie and transactionid if needed
 			a.IP[i] ^= x
 		}
 		a.Port ^= magicCookiePort
@@ -66,9 +66,7 @@ func appendMappedAddress(m Message, ip net.IP, port uint16) []byte {
 	n := len(ip)
 	m = append(m, byte(attrMappedAddress>>8), byte(attrMappedAddress),
 		0, byte(4+n), 0, family(n), byte(port>>8), byte(port))
-	m = append(m, ip...)
-	m.setAttrSize()
-	return m
+	return append(m, ip...)
 }
 
 func appendXorMappedAddress(m Message, ip net.IP, port uint16) []byte {
@@ -76,11 +74,10 @@ func appendXorMappedAddress(m Message, ip net.IP, port uint16) []byte {
 	n := len(ip)
 	m = append(m, byte(attrXorMappedAddress>>8), byte(attrXorMappedAddress),
 		0, byte(4+n), 0, family(n), byte(port>>8), byte(port))
-	m = append(m, m.cookieTxID(n)...)
+	m = append(m, m[4:4+n]...) // m[4:4+n] spans magiccookie and transactionid if needed
 	s := m[len(m)-n:]
 	for i, x := range ip {
 		s[i] ^= x
 	}
-	m.setAttrSize()
 	return m
 }

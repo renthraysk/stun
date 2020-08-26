@@ -40,13 +40,16 @@ const (
 	attrFingerprint        attr = 0x8028
 )
 
+type passwordAlgorithm uint16
+
 const (
-	passwordAlgorithmMD5    = 0x0001
-	passwordAlgorithmSHA256 = 0x0002
+	passwordAlgorithmMD5    passwordAlgorithm = 0x0001
+	passwordAlgorithmSHA256 passwordAlgorithm = 0x0002
 )
 
 const (
-	fingerPrintXor uint32 = 0x5354554e
+	fingerprintSize        = 8
+	fingerprintXor  uint32 = 0x5354554e
 )
 
 var (
@@ -54,71 +57,69 @@ var (
 	colon   = [1]byte{':'}
 )
 
-func newHeader(buf []byte, t Type, txID [12]byte) Message {
+func newHeader(buf []byte, t Type, txID [12]byte) []byte {
 	m := append(buf[:0], byte(t>>8), byte(t), 0, 0, byte(magicCookie>>24), byte(magicCookie>>16&0xFF), byte(magicCookie>>8&0xFF), byte(magicCookie&0xFF))
 	return append(m, txID[:]...)
 }
 
-func appendAttribute(m Message, a attr, b []byte) Message {
+func appendAttribute(m []byte, a attr, b []byte) []byte {
 	n := len(b)
 	m = append(m, byte(a>>8), byte(a), byte(n>>8), byte(n))
 	m = append(m, b...)
 	if i := n & 3; i != 0 {
 		m = append(m, zeroPad[i:4]...)
 	}
-	m.setAttrSize()
 	return m
 }
 
-func appendAttributeString(m Message, a attr, s string) Message {
+func appendAttributeString(m []byte, a attr, s string) []byte {
 	n := len(s)
 	m = append(m, byte(a>>8), byte(a), byte(n>>8), byte(n))
 	m = append(m, s...)
 	if i := n & 3; i != 0 {
 		m = append(m, zeroPad[i:4]...)
 	}
-	m.setAttrSize()
 	return m
 }
 
-func appendAttributeUint32(m Message, a attr, x uint32) Message {
-	m = append(m, byte(a>>8), byte(a), 0, 4, byte(x>>24), byte(x>>16), byte(x>>8), byte(x))
-	m.setAttrSize()
-	return m
+func appendAttributeUint32(m []byte, a attr, x uint32) []byte {
+	return append(m, byte(a>>8), byte(a), 0, 4, byte(x>>24), byte(x>>16), byte(x>>8), byte(x))
 }
 
-func appendSoftware(m Message, s string) Message {
+func appendSoftware(m []byte, s string) []byte {
 	return appendAttributeString(m, attrSoftware, s)
 }
 
-func appendFingerprint(m Message) Message {
-	m = appendAttributeUint32(m, attrFingerprint, 0)
-	binary.BigEndian.PutUint32(m[len(m)-4:], crc32.ChecksumIEEE(m)^fingerPrintXor)
-	return m
+func appendFingerprint(m []byte) []byte {
+	binary.BigEndian.PutUint16(m[2:4], uint16(len(m)-headerSize+fingerprintSize))
+	return appendAttributeUint32(m, attrFingerprint, crc32.ChecksumIEEE(m)^fingerprintXor)
 }
 
-func appendRealm(m Message, r string) Message {
+func appendRealm(m []byte, r string) []byte {
 	return appendAttributeString(m, attrRealm, r)
 }
 
-func appendNonce(m Message, nonce []byte) Message {
+func appendNonce(m []byte, nonce []byte) []byte {
 	return appendAttribute(m, attrNonce, nonce)
 }
 
-func appendHMAC(m Message, a attr, h func() hash.Hash, key []byte) Message {
-	mac := hmac.New(h, key)
-	n := mac.Size()
-	m = append(m, byte(a>>8), byte(a), byte(n>>8), byte(n))
-	m = append(m, zeroPad[:n]...)
-	m.setAttrSize()
-	mac.Write(m)
-	return mac.Sum(m[:len(m)-n])
+func appendUserHash(m []byte, userhash []byte) []byte {
+	return appendAttribute(m, attrUserHash, userhash)
 }
 
-func appendMessageIntegrity(m Message, key []byte) Message {
+func appendHMAC(m []byte, a attr, h func() hash.Hash, key []byte) []byte {
+	mac := hmac.New(h, key)
+	n := mac.Size()
+	binary.BigEndian.PutUint16(m[2:4], uint16(len(m)-headerSize+4+n))
+	mac.Write(m)
+	m = append(m, byte(a>>8), byte(a), byte(n>>8), byte(n))
+	return mac.Sum(m)
+}
+
+func appendMessageIntegrity(m []byte, key []byte) []byte {
 	return appendHMAC(m, attrMessageIntegrity, sha1.New, key)
 }
 
-func appendMessageIntegritySHA256(m Message, key []byte) Message {
+func appendMessageIntegritySHA256(m []byte, key []byte) []byte {
 	return appendHMAC(m, attrMessageIntegritySHA256, sha256.New, key)
 }

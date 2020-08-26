@@ -2,6 +2,7 @@ package stun
 
 import (
 	"crypto/rand"
+	"crypto/sha256"
 	"net"
 )
 
@@ -25,17 +26,6 @@ const (
 
 type TxID [12]byte
 
-func bindingSuccess(buf []byte, txID TxID, a *net.UDPAddr) []byte {
-	p := newHeader(buf, TypeBindingSuccess, txID)
-	return appendXorMappedAddress(p, a.IP, uint16(a.Port))
-}
-
-func bindingRequest(buf []byte, txID TxID, software string) []byte {
-	p := newHeader(buf, TypeBindingRequest, txID)
-	p = appendSoftware(p, software)
-	return appendFingerprint(p)
-}
-
 func Serve(pc net.PacketConn) {
 	buf := make([]byte, 4*1024)
 	for {
@@ -49,8 +39,14 @@ func Serve(pc net.PacketConn) {
 		}
 		switch m.Type() {
 		case TypeBindingRequest:
-			r := bindingSuccess(buf[:0], m.TxID(), addr.(*net.UDPAddr))
-			if _, err := pc.WriteTo(r, addr); err != nil {
+			b := New(TypeBindingSuccess, m.TxID())
+			b.AppendXorMappingAddress(addr.(*net.UDPAddr))
+			if err == nil {
+				if b, err := b.Bytes(); err != nil {
+					if _, err := pc.WriteTo(b, addr); err != nil {
+						// @TODO?
+					}
+				}
 			}
 		}
 	}
@@ -61,5 +57,15 @@ func BindingRequest(buf []byte, software string) ([]byte, error) {
 	if _, err := rand.Read(txID[:]); err != nil {
 		return nil, err
 	}
-	return bindingRequest(buf, txID, software), nil
+	b := New(TypeBindingRequest, txID)
+	b.AppendSoftware(software)
+	return b.Bytes()
+}
+
+func UserHash(b, name, realm []byte) []byte {
+	h := sha256.New()
+	h.Write(name)
+	h.Write([]byte{':'})
+	h.Write(realm)
+	return h.Sum(b)
 }
