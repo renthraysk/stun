@@ -4,10 +4,6 @@ import (
 	"net"
 )
 
-type errorString string
-
-func (e errorString) Error() string { return string(e) }
-
 const (
 	headerSize = 20
 

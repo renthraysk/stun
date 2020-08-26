@@ -43,15 +43,15 @@ func (a *Address) Unmarshal(m Message, attr []byte) error {
 	} else if f != iPv4Family {
 		return ErrUnknownIPFamily
 	}
-	if len(attr) != 8+n || attrSize(attr) != 4+n {
+	if len(attr) != 8+n || attributeSize(attr) != 4+n {
 		return ErrMalformedAttribute
 	}
 	a.IP = a.buf[:n] // make([]byte, n)
 	copy(a.IP, attr[8:])
 	a.Port = binary.BigEndian.Uint16(attr[6:8])
-	switch attrType(attr) {
+	switch attributeType(attr) {
 	case attrXorMappedAddress:
-		for i, x := range m[4 : 4+n] { // m[4:4+n] spans magiccookie and transactionid if needed
+		for i, x := range m[4 : 4+n] { // m[4:4+n] spans magiccookie and transaction id if needed
 			a.IP[i] ^= x
 		}
 		a.Port ^= magicCookiePort
@@ -74,7 +74,7 @@ func appendXorMappedAddress(m Message, ip net.IP, port uint16) []byte {
 	n := len(ip)
 	m = append(m, byte(attrXorMappedAddress>>8), byte(attrXorMappedAddress),
 		0, byte(4+n), 0, family(n), byte(port>>8), byte(port))
-	m = append(m, m[4:4+n]...) // m[4:4+n] spans magiccookie and transactionid if needed
+	m = append(m, m[4:4+n]...) // m[4:4+n] spans magiccookie and transaction id if needed
 	s := m[len(m)-n:]
 	for i, x := range ip {
 		s[i] ^= x

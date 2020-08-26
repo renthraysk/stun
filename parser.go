@@ -9,27 +9,14 @@ import (
 	"hash/crc32"
 )
 
-const (
-	ErrMalformedAttribute       = errorString("malformed attribute")
-	ErrNotASTUNMessage          = errorString("not a stun message")
-	ErrFingerprint              = errorString("fingerprint check failed")
-	ErrMessageIntegrity         = errorString("messageintegrity check failed")
-	ErrMessageIntegritySHA256   = errorString("messageintegritysha256 check failed")
-	ErrUnknownPasswordAlgorithm = errorString("unknown password algorithm")
-	ErrUsernameTooLong          = errorString("username too long")
-	ErrRealmTooLong             = errorString("realm too long")
-	ErrMissingUsername          = errorString("missing username")
-	ErrMissingRealm             = errorString("missing realm")
-)
-
 type Message []byte
 
 func (m Message) Type() Type     { return Type(binary.BigEndian.Uint16(m[:2])) }
 func (m Message) AttrSize() int  { return int(binary.BigEndian.Uint16(m[2:4])) }
 func (m Message) TxID() (t TxID) { copy(t[:], m[8:]); return }
 
-func attrType(a []byte) attr { return attr(binary.BigEndian.Uint16(a[:2])) }
-func attrSize(a []byte) int  { return int(uint(binary.BigEndian.Uint16(a[2:4]))) }
+func attributeType(a []byte) attr { return attr(binary.BigEndian.Uint16(a[:2])) }
+func attributeSize(a []byte) int  { return int(uint(binary.BigEndian.Uint16(a[2:4]))) }
 
 var key = []byte{31: 0}
 
@@ -50,78 +37,74 @@ func Parse(in []byte) (Message, error) {
 	if s := int(binary.BigEndian.Uint16(in[2:4])); s+headerSize != len(in) || s%4 != 0 {
 		return nil, ErrNotASTUNMessage
 	}
-	n := headerSize // number of bytes parsed
-	for attr := in[headerSize:]; len(attr) > 4; attr = in[n:] {
-		s := attrSize(attr)
-		switch attrType(attr) {
-
-		case attrUsername:
-		case attrRealm:
-		case attrPasswordAlgorithms:
+	bytesParsed := headerSize
+	for attr := in[headerSize:]; len(attr) > 4; attr = in[bytesParsed:] {
+		attrType, attrSize := attributeType(attr), attributeSize(attr)
+		attr = attr[4:]
+		switch attrType {
 
 		case attrFingerprint:
-			// fingerprint must be the last attribute, len(attr) != attrFingerpintSize provides that condition
-			if s != 4 || len(attr) != fingerprintSize || !validateFingerprint(in[:n], attr[4:8]) {
+			// fingerprint must be the last attribute, len(attr) != 4 provides that condition
+			if attrSize != 4 || len(attr) != 4 || !validateFingerprint(in[:bytesParsed], attr) {
 				return nil, ErrFingerprint
 			}
 
 		case attrMessageIntegrity:
-			if s != sha1.Size || len(attr) < 4+sha1.Size {
+			if attrSize != sha1.Size || len(attr) < sha1.Size {
 				return nil, ErrMessageIntegrity
 			}
-			attr = attr[4:]
 			if len(attr) > sha1.Size {
 				// Only fingerprint and messageintegritySHA256 attributes are allowed to follow messageintegrity attribute
 				a := attr[sha1.Size:]
 				if len(a) < fingerprintSize {
 					return nil, ErrMessageIntegrity
 				}
-				switch attrType(a) {
+				switch attributeType(a) {
 				case attrFingerprint:
 					// ignore everything after messageintegrity and fingerprint attributes
-					in = in[:n+4+sha1.Size+fingerprintSize]
+					in = in[:bytesParsed+4+sha1.Size+fingerprintSize]
 				case attrMessageIntegritySHA256:
-					nn := 4 + attrSize(a)
-					if len(a) < nn {
+					n := 4 + attributeSize(a)
+					if len(a) < n {
 						return nil, ErrMessageIntegrity
 					}
-					if a = a[nn:]; len(a) < fingerprintSize || attrType(a) != attrFingerprint {
+					if a = a[n:]; len(a) < fingerprintSize || attributeType(a) != attrFingerprint {
 						return nil, ErrMessageIntegrity
 					}
-					in = in[:n+nn+fingerprintSize]
+					// ignore everything after messageintegritysha256 and fingerprint attributes
+					in = in[:bytesParsed+n+fingerprintSize]
 				default:
 					return nil, ErrMessageIntegrity
 				}
 				attr = attr[:sha1.Size]
 			}
-			if !validateHMAC(in[:n], attr, sha1.New, key) {
+			if !validateHMAC(in[:bytesParsed], attr, sha1.New, key) {
 				return nil, ErrMessageIntegrity
 			}
 
 		case attrMessageIntegritySHA256:
 			// The value will be at most 32 bytes, but it MUST be at least 16 bytes and MUST be a multiple of 4 bytes.
-			if s > sha256.Size || s < 16 || s%4 != 0 {
+			if attrSize > sha256.Size || attrSize < 16 || attrSize%4 != 0 {
 				return nil, ErrMessageIntegritySHA256
 			}
-			attr = attr[4:]
-			if s > len(attr) {
+			if len(attr) < attrSize {
 				return nil, ErrMessageIntegritySHA256
 			}
-			if s < len(attr) {
+			if len(attr) > attrSize {
 				// Only fingerprint attribute is allowed to follow messageintegritysha256 attribute
-				if a := attr[s:]; len(a) < fingerprintSize || attrType(a) != attrFingerprint {
+				if a := attr[attrSize:]; len(a) < fingerprintSize || attributeType(a) != attrFingerprint {
 					return nil, ErrMessageIntegritySHA256
 				}
 				// ignore everything after messageintegritysha256 and fingerprint attributes
-				in = in[:n+4+s+fingerprintSize]
-				attr = attr[:s]
+				in = in[:bytesParsed+4+attrSize+fingerprintSize]
+				attr = attr[:attrSize]
 			}
-			if !validateHMAC(in[:n], attr, sha256.New, key) {
+			if !validateHMAC(in[:bytesParsed], attr, sha256.New, key) {
 				return nil, ErrMessageIntegritySHA256
 			}
 		}
-		s += 7 // 2 byte attr, 2 byte length, 3 for padding round up
-		n += s - (s % 4)
+		attrSize += 7 // 2 byte attr, 2 byte length, 3 for padding round up
+		bytesParsed += attrSize - (attrSize % 4)
 	}
 	//
 	return Message(in), nil

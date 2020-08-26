@@ -24,13 +24,8 @@ const (
 	stMessageIntegrity
 	stMessageIntegritySHA256
 	stFingerprint
-	stErrInvalidAttributeAppend
+	stErrInvalidAttributeAppend // Must be first error state
 	stErrInvalidMessageIntegritySHA256Length
-)
-
-const (
-	ErrAttrInvalidAttributeAppend          = errorString("invalid attribute appended after MessageIntegrity, MessageIntegritySHA256 or Fingerprint")
-	ErrInvalidMessageIntegritySHA256Length = errorString("invalid MessageIntegritySHA256 length")
 )
 
 type Builder struct {
