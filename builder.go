@@ -6,7 +6,6 @@ import (
 	"net"
 )
 
-// @TODO Enforce attribute length limits
 // @TODO Enforce attributes to each STUN message class they belong
 
 /*
@@ -26,6 +25,10 @@ const (
 	stFingerprint
 	stErrInvalidAttributeAppend // Must be first error state
 	stErrInvalidMessageIntegritySHA256Length
+	stErrUsernameTooLong
+	stErrSoftwareTooLong
+	stErrRealmTooLong
+	stErrNonceTooLong
 )
 
 type Builder struct {
@@ -37,10 +40,30 @@ func New(t Type, txID TxID) *Builder {
 	return &Builder{msg: newHeader(make([]byte, 0, 512), t, txID)}
 }
 
-// AppendSoftware appends Software attribute to the STUN message
-func (b *Builder) AppendSoftware(name string) {
+func (b *Builder) AppendUsername(username string) {
+	const maxByteLength = 513
+
 	if b.state == stOpen {
-		b.msg = appendSoftware(b.msg, name)
+		if len(username) > maxByteLength {
+			b.state = stErrUsernameTooLong
+			return
+		}
+		b.msg = appendUsername(b.msg, username)
+	} else if b.state < stErrInvalidAttributeAppend {
+		b.state = stErrInvalidAttributeAppend
+	}
+}
+
+// AppendSoftware appends Software attribute to the STUN message
+func (b *Builder) AppendSoftware(software string) {
+	const maxByteLength = 763
+
+	if b.state == stOpen {
+		if len(software) > maxByteLength {
+			b.state = stErrSoftwareTooLong
+			return
+		}
+		b.msg = appendSoftware(b.msg, software)
 	} else if b.state < stErrInvalidAttributeAppend {
 		b.state = stErrInvalidAttributeAppend
 	}
@@ -72,7 +95,7 @@ func (b *Builder) AppendMessageIntegritySHA256(key []byte) {
 }
 
 // AppendMessageIntegritySHA256Truncated appends an optionally truncated MessageIntegritySHA256 attribute.
-// n the length of the attribute should be between 16 and 32 inclusive, and divisible by 4.
+// n the length of the attribute should be between 16 and 32 inclusive, and be divisible by 4.
 func (b *Builder) AppendMessageIntegritySHA256Truncated(key []byte, n int) {
 	if b.state < stMessageIntegritySHA256 {
 		if n > sha256.Size || n < 16 || n%4 != 0 {
@@ -103,7 +126,13 @@ func (b *Builder) AppendXorMappingAddress(addr *net.UDPAddr) {
 }
 
 func (b *Builder) AppendRealm(realm string) {
+	const maxByteLength = 763
+
 	if b.state == stOpen {
+		if len(realm) > maxByteLength {
+			b.state = stErrRealmTooLong
+			return
+		}
 		b.msg = appendRealm(b.msg, realm)
 	} else if b.state < stErrInvalidAttributeAppend {
 		b.state = stErrInvalidAttributeAppend
@@ -111,7 +140,13 @@ func (b *Builder) AppendRealm(realm string) {
 }
 
 func (b *Builder) AppendNonce(nonce []byte) {
+	const maxByteLength = 763
+
 	if b.state == stOpen {
+		if len(nonce) > maxByteLength {
+			b.state = stErrNonceTooLong
+			return
+		}
 		b.msg = appendNonce(b.msg, nonce)
 	} else if b.state < stErrInvalidAttributeAppend {
 		b.state = stErrInvalidAttributeAppend
@@ -135,9 +170,16 @@ func (b *Builder) Bytes() ([]byte, error) {
 	switch b.state {
 	case stErrInvalidAttributeAppend:
 		return nil, ErrAttrInvalidAttributeAppend
-
 	case stErrInvalidMessageIntegritySHA256Length:
 		return nil, ErrInvalidMessageIntegritySHA256Length
+	case stErrUsernameTooLong:
+		return nil, ErrUsernameTooLong
+	case stErrSoftwareTooLong:
+		return nil, ErrSoftwareTooLong
+	case stErrRealmTooLong:
+		return nil, ErrRealmTooLong
+	case stErrNonceTooLong:
+		return nil, ErrNonceTooLong
 	}
 	panic("Unreachable")
 }

@@ -91,6 +91,10 @@ func appendAttributeUint32(m []byte, a attr, x uint32) []byte {
 	return append(m, byte(a>>8), byte(a), 0, 4, byte(x>>24), byte(x>>16), byte(x>>8), byte(x))
 }
 
+func appendUsername(m []byte, username string) []byte {
+	return appendAttributeString(m, attrUsername, username)
+}
+
 func appendSoftware(m []byte, s string) []byte {
 	return appendAttributeString(m, attrSoftware, s)
 }
