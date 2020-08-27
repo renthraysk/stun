@@ -31,6 +31,7 @@ const (
 	attrXorRelayedAddress      attr = 0x0016
 	attrRequestedAddressFamily attr = 0x0017
 	attrMessageIntegritySHA256 attr = 0x001C
+	attrPasswordAlgorithm      attr = 0x001D
 	attrUserHash               attr = 0x001E
 	attrXorMappedAddress       attr = 0x0020
 	attrReservationToken       attr = 0x0022
@@ -41,15 +42,17 @@ const (
 	attrConnectionID           attr = 0x002A
 
 	attrPasswordAlgorithms attr = 0x8002
+	attrAlternateDomain    attr = 0x8003
 	attrSoftware           attr = 0x8022
+	attrAlternateServer    attr = 0x8023
 	attrFingerprint        attr = 0x8028
 )
 
-type passwordAlgorithm uint16
+type PasswordAlgorithm uint16
 
 const (
-	passwordAlgorithmMD5    passwordAlgorithm = 0x0001
-	passwordAlgorithmSHA256 passwordAlgorithm = 0x0002
+	PasswordAlgorithmMD5    PasswordAlgorithm = 0x0001
+	PasswordAlgorithmSHA256 PasswordAlgorithm = 0x0002
 )
 
 const (
@@ -58,7 +61,7 @@ const (
 )
 
 var (
-	zeroPad = [sha256.Size]byte{}
+	zeroPad = [4]byte{0, 0, 0, 0}
 	colon   = [1]byte{':'}
 )
 
@@ -116,9 +119,58 @@ func appendUserHash(m []byte, userhash []byte) []byte {
 	return appendAttribute(m, attrUserHash, userhash)
 }
 
+//go:generate stringer -type ErrorCode -trimprefix ErrorCode
+
+type ErrorCode uint16
+
+const (
+	ErrorCodeTryAlternate     ErrorCode = 300
+	ErrorCodeBadRequest       ErrorCode = 400
+	ErrorCodeUnauthenticated  ErrorCode = 401
+	ErrorCodeUnknownAttribute ErrorCode = 420
+	ErrorCodeStaleNonce       ErrorCode = 438
+	ErrorCodeServerErrorRetry ErrorCode = 500
+)
+
+func appendErrorCode(m []byte, errorCode ErrorCode, reason string) []byte {
+	n := 4 + len(reason)
+	m = append(m, byte(attrErrorCode>>8), byte(attrErrorCode), byte(n>>8), byte(n),
+		0, 0, byte(errorCode>>8), byte(errorCode))
+	m = append(m, reason...)
+	if i := n & 3; i != 0 {
+		m = append(m, zeroPad[i:4]...)
+	}
+	return m
+}
+
+func appendPasswordAlgorithm(m []byte, passwordAlgorithm PasswordAlgorithm, parameters []byte) []byte {
+	p := len(parameters)
+	n := 4 + p
+	m = append(m, byte(attrPasswordAlgorithm>>8), byte(attrPasswordAlgorithm), byte(n>>8), byte(n),
+		byte(passwordAlgorithm>>8), byte(passwordAlgorithm), byte(p>>8), byte(p))
+	m = append(m, parameters...)
+	if i := n & 3; i != 0 {
+		m = append(m, zeroPad[i:4]...)
+	}
+	return m
+}
+
+func appendUnknownAttributes(m []byte, attributes []uint16) []byte {
+	n := len(attributes) * 2
+	m = append(m, byte(attrUnknownAttributes>>8), byte(attrUnknownAttributes), byte(n>>8), byte(n))
+	for _, a := range attributes {
+		m = append(m, byte(a>>8), byte(a))
+	}
+	return m
+}
+
+func appendAlternateDomain(m []byte, domain string) []byte {
+	return appendAttributeString(m, attrAlternateDomain, domain)
+}
+
 func appendHMAC(m []byte, a attr, h func() hash.Hash, key []byte, n int) []byte {
-	mac := hmac.New(h, key)
 	binary.BigEndian.PutUint16(m[2:4], uint16(len(m)-headerSize+4+n))
+	mac := hmac.New(h, key)
 	mac.Write(m)
 	m = append(m, byte(a>>8), byte(a), byte(n>>8), byte(n))
 	m = mac.Sum(m)

@@ -56,20 +56,24 @@ func (a *Address) Unmarshal(m Message, attr []byte) error {
 		}
 		a.Port ^= magicCookiePort
 		return nil
-	case attrMappedAddress:
+	case attrMappedAddress, attrAlternateServer:
 		return nil
 	}
 	return ErrUnknownAddressAttribute
 }
 
-func appendMappedAddress(m Message, ip net.IP, port uint16) []byte {
+func appendAddress(m []byte, a attr, ip net.IP, port uint16) []byte {
 	n := len(ip)
-	m = append(m, byte(attrMappedAddress>>8), byte(attrMappedAddress),
+	m = append(m, byte(a>>8), byte(a),
 		0, byte(4+n), 0, family(n), byte(port>>8), byte(port))
 	return append(m, ip...)
 }
 
-func appendXorMappedAddress(m Message, ip net.IP, port uint16) []byte {
+func appendMappedAddress(m []byte, ip net.IP, port uint16) []byte {
+	return appendAddress(m, attrMappedAddress, ip, port)
+}
+
+func appendXorMappedAddress(m []byte, ip net.IP, port uint16) []byte {
 	port ^= magicCookiePort
 	n := len(ip)
 	m = append(m, byte(attrXorMappedAddress>>8), byte(attrXorMappedAddress),
@@ -80,4 +84,8 @@ func appendXorMappedAddress(m Message, ip net.IP, port uint16) []byte {
 		s[i] ^= x
 	}
 	return m
+}
+
+func appendAlternateServer(m []byte, ip net.IP, port uint16) []byte {
+	return appendAddress(m, attrAlternateServer, ip, port)
 }

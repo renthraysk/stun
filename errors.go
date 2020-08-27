@@ -19,6 +19,9 @@ const (
 	ErrMissingUsername       = errorString("missing username")
 	ErrMissingRealm          = errorString("missing realm")
 	ErrInvalidUserHashLength = errorString("invalid userhash length")
+	ErrInvalidErrorCode      = errorString("invalid error code")
+	ErrReasonTooLong         = errorString("reason too long")
+	ErrDomainTooLong         = errorString("domain too long")
 
 	ErrAttrInvalidAttributeAppend          = errorString("invalid attribute appended after MessageIntegrity, MessageIntegritySHA256 or Fingerprint")
 	ErrInvalidMessageIntegritySHA256Length = errorString("invalid MessageIntegritySHA256 length")

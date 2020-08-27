@@ -41,6 +41,9 @@ func Parse(in []byte) (Message, error) {
 	for attr := in[headerSize:]; len(attr) > 4; attr = in[bytesParsed:] {
 		attrType, attrSize := attributeType(attr), attributeSize(attr)
 		attr = attr[4:]
+		if len(attr) < attrSize {
+			return nil, ErrMalformedAttribute
+		}
 		switch attrType {
 
 		case attrFingerprint:
@@ -50,7 +53,7 @@ func Parse(in []byte) (Message, error) {
 			}
 
 		case attrMessageIntegrity:
-			if attrSize != sha1.Size || len(attr) < sha1.Size {
+			if attrSize != sha1.Size {
 				return nil, ErrMessageIntegrity
 			}
 			if len(attr) > sha1.Size {
@@ -85,9 +88,6 @@ func Parse(in []byte) (Message, error) {
 		case attrMessageIntegritySHA256:
 			// The value will be at most 32 bytes, but it MUST be at least 16 bytes and MUST be a multiple of 4 bytes.
 			if attrSize > sha256.Size || attrSize < 16 || attrSize%4 != 0 {
-				return nil, ErrMessageIntegritySHA256
-			}
-			if len(attr) < attrSize {
 				return nil, ErrMessageIntegritySHA256
 			}
 			if len(attr) > attrSize {
