@@ -34,6 +34,7 @@ const (
 	stErrReasonTooLong
 	stErrInvalidUserHashLength
 	stErrDomainTooLong
+	stErrInvalidIPAddress
 )
 
 type Builder struct {
@@ -53,6 +54,10 @@ func (b *Builder) AppendMappingAddress(addr *net.UDPAddr) {
 		}
 		return
 	}
+	if len(addr.IP) != net.IPv4len && len(addr.IP) != net.IPv6len {
+		b.state = stErrInvalidIPAddress
+		return
+	}
 	b.msg = appendMappedAddress(b.msg, addr.IP, uint16(addr.Port))
 }
 
@@ -62,6 +67,10 @@ func (b *Builder) AppendXorMappingAddress(addr *net.UDPAddr) {
 		if b.state < stErrInvalidAttributeAppend {
 			b.state = stErrInvalidAttributeAppend
 		}
+		return
+	}
+	if len(addr.IP) != net.IPv4len && len(addr.IP) != net.IPv6len {
+		b.state = stErrInvalidIPAddress
 		return
 	}
 	b.msg = appendXorMappedAddress(b.msg, addr.IP, uint16(addr.Port))
@@ -256,6 +265,10 @@ func (b *Builder) AppendAlternateServer(ip net.IP, port uint16) {
 		}
 		return
 	}
+	if len(ip) != net.IPv4len && len(ip) != net.IPv6len {
+		b.state = stErrInvalidIPAddress
+		return
+	}
 	b.msg = appendAlternateServer(b.msg, ip, port)
 }
 
@@ -303,6 +316,8 @@ func (b *Builder) Bytes() ([]byte, error) {
 		return nil, ErrInvalidUserHashLength
 	case stErrDomainTooLong:
 		return nil, ErrDomainTooLong
+	case stErrInvalidIPAddress:
+		return nil, ErrInvalidIPAddress
 	}
 	panic("Unreachable")
 }

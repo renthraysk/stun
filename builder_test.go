@@ -1,6 +1,9 @@
 package stun
 
-import "testing"
+import (
+	"net"
+	"testing"
+)
 
 var testTxID TxID
 var testKey = []byte{16: 0}
@@ -77,6 +80,63 @@ func TestBuilderTruncatedMessageIntegritySHA256(t *testing.T) {
 		if err == nil {
 			if err := m.Unmarshal(raw); err != nil {
 				t.Fatalf("parse error: %v", err)
+			}
+		}
+	}
+}
+
+func TestBuilderIPAddressLengthValidation(t *testing.T) {
+	tests := []struct {
+		ip  []byte
+		err error
+	}{
+		{ip: net.IP{127}, err: ErrInvalidIPAddress},
+		{ip: net.IP{127, 0, 0, 1}, err: nil},
+		{ip: net.IP{0xFF, 127, 0, 0, 1}, err: ErrInvalidIPAddress},
+		{ip: net.IP{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1}, err: nil},
+		{ip: net.IP{0xFF, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1}, err: ErrInvalidIPAddress},
+	}
+
+	var m Message
+
+	for _, tt := range tests {
+		{
+			b := New(TypeBindingRequest, testTxID)
+			b.AppendXorMappingAddress(&net.UDPAddr{IP: tt.ip, Port: 1234})
+			raw, err := b.Bytes()
+			if err != tt.err {
+				t.Fatalf("build: expected error %v, got %v", tt.err, err)
+			}
+			if err == nil {
+				if err := m.Unmarshal(raw); err != nil {
+					t.Fatalf("parse error: %v", err)
+				}
+			}
+		}
+		{
+			b := New(TypeBindingRequest, testTxID)
+			b.AppendMappingAddress(&net.UDPAddr{IP: tt.ip, Port: 1234})
+			raw, err := b.Bytes()
+			if err != tt.err {
+				t.Fatalf("build: expected error %v, got %v", tt.err, err)
+			}
+			if err == nil {
+				if err := m.Unmarshal(raw); err != nil {
+					t.Fatalf("parse error: %v", err)
+				}
+			}
+		}
+		{
+			b := New(TypeBindingRequest, testTxID)
+			b.AppendAlternateServer(tt.ip, 1234)
+			raw, err := b.Bytes()
+			if err != tt.err {
+				t.Fatalf("build: expected error %v, got %v", tt.err, err)
+			}
+			if err == nil {
+				if err := m.Unmarshal(raw); err != nil {
+					t.Fatalf("parse error: %v", err)
+				}
 			}
 		}
 	}
