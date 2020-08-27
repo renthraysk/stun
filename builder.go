@@ -289,35 +289,29 @@ func (b *Builder) AppendAlternateDomain(domain string) {
 	b.msg = appendAlternateDomain(b.msg, domain)
 }
 
+var errMap = [...]error{
+	stErrInvalidAttributeAppend:              ErrInvalidAttributeSequence,
+	stErrInvalidMessageIntegritySHA256Length: ErrInvalidMessageIntegritySHA256Length,
+	stErrUsernameTooLong:                     ErrUsernameTooLong,
+	stErrRealmTooLong:                        ErrRealmTooLong,
+	stErrNonceTooLong:                        ErrNonceTooLong,
+	stErrInvalidErrorCode:                    ErrInvalidErrorCode,
+	stErrReasonTooLong:                       ErrReasonTooLong,
+	stErrInvalidUserHashLength:               ErrInvalidUserHashLength,
+	stErrDomainTooLong:                       ErrDomainTooLong,
+	stErrInvalidIPAddress:                    ErrInvalidIPAddress,
+}
+
 // Bytes return the raw STUN message or an error if one occurred during it's building.
 func (b *Builder) Bytes() ([]byte, error) {
 	if b.state < stErrInvalidAttributeAppend {
 		binary.BigEndian.PutUint16(b.msg[2:4], uint16(len(b.msg)-headerSize))
 		return b.msg, nil
 	}
-	switch b.state {
-	case stErrInvalidAttributeAppend:
-		return nil, ErrInvalidAttributeSequence
-	case stErrInvalidMessageIntegritySHA256Length:
-		return nil, ErrInvalidMessageIntegritySHA256Length
-	case stErrUsernameTooLong:
-		return nil, ErrUsernameTooLong
-	case stErrSoftwareTooLong:
-		return nil, ErrSoftwareTooLong
-	case stErrRealmTooLong:
-		return nil, ErrRealmTooLong
-	case stErrNonceTooLong:
-		return nil, ErrNonceTooLong
-	case stErrInvalidErrorCode:
-		return nil, ErrInvalidErrorCode
-	case stErrReasonTooLong:
-		return nil, ErrReasonTooLong
-	case stErrInvalidUserHashLength:
-		return nil, ErrInvalidUserHashLength
-	case stErrDomainTooLong:
-		return nil, ErrDomainTooLong
-	case stErrInvalidIPAddress:
-		return nil, ErrInvalidIPAddress
+	if int(b.state) < len(errMap) {
+		if err := errMap[b.state]; err != nil {
+			return nil, err
+		}
 	}
-	panic("Unreachable")
+	panic("Builder error state not mapped to an error")
 }
