@@ -279,7 +279,7 @@ func (b *Builder) Bytes() ([]byte, error) {
 	}
 	switch b.state {
 	case stErrInvalidAttributeAppend:
-		return nil, ErrAttrInvalidAttributeAppend
+		return nil, ErrInvalidAttributeSequence
 	case stErrInvalidMessageIntegritySHA256Length:
 		return nil, ErrInvalidMessageIntegritySHA256Length
 	case stErrUsernameTooLong:

@@ -128,7 +128,7 @@ func TestParseMessageIntegritySHA256Fingerprint(t *testing.T) {
 	}
 }
 
-func TestParseMessageIntegrityFingerprint(t *testing.T) {
+func TestParseMessageIntegrityFingerprintIsAllowed(t *testing.T) {
 	// Only attribute allowed after a MessageIntegrity is Fingerprint
 	m := newHeader(nil, TypeBindingRequest, txID)
 	m = appendMessageIntegrity(m, key)
@@ -136,18 +136,18 @@ func TestParseMessageIntegrityFingerprint(t *testing.T) {
 	setAttrSize(m)
 
 	if _, err := Parse(m); err != nil {
-		t.Fatalf("parse failed: %v", err)
+		t.Fatalf("allowed attribute sequence failed: %v", err)
 	}
 }
-func TestParseMessageIntegrityMessageIntegrity256Fingerprint(t *testing.T) {
-	// Only attribute allowed after a MessageIntegrity is Fingerprint
+func TestParseMessageIntegrityFollowedByMessageIntegrity256IsAllowed(t *testing.T) {
+	// MessageIntegrity followed by MessageIntegrity256 is allowed
 	m := newHeader(nil, TypeBindingRequest, txID)
 	m = appendMessageIntegrity(m, key)
 	m = appendMessageIntegritySHA256(m, key, sha256.Size)
 	setAttrSize(m)
 
-	if _, err := Parse(m); err != ErrMessageIntegrity {
-		t.Fatal("expected ErrMessageIntegrity err")
+	if _, err := Parse(m); err != nil {
+		t.Fatalf("allowed attribute sequence failed: %v", err)
 	}
 }
 
@@ -158,8 +158,8 @@ func TestParseMessageIntegrityShouldBeOnlyFollowedByFingerprint(t *testing.T) {
 	m = appendSoftware(m, "test")
 	setAttrSize(m)
 
-	if _, err := Parse(m); err != ErrMessageIntegrity {
-		t.Fatal("expected ErrMessageIntegrity err")
+	if _, err := Parse(m); err != ErrInvalidAttributeSequence {
+		t.Fatal("invalid attribute sequence did not cause expected invalid attribute sequence error")
 	}
 }
 
@@ -170,8 +170,8 @@ func TestParseMessageIntegritySHA256ShouldBeOnlyFollowedByFingerprint(t *testing
 	m = appendSoftware(m, "test")
 	setAttrSize(m)
 
-	if _, err := Parse(m); err != ErrMessageIntegritySHA256 {
-		t.Fatal("expected ErrMessageIntegritySHA256 error")
+	if _, err := Parse(m); err != ErrInvalidAttributeSequence {
+		t.Fatal("invalid attribute sequence did not cause expected invalid attribute sequence error")
 	}
 }
 
@@ -182,8 +182,8 @@ func TestParseFingerprintShouldBeLastAttribute(t *testing.T) {
 	m = appendMessageIntegritySHA256(m, key, sha256.Size)
 	setAttrSize(m)
 
-	if _, err := Parse(m); err == nil {
-		t.Fatalf("expected failure")
+	if _, err := Parse(m); err != ErrInvalidAttributeSequence {
+		t.Fatalf("invalid attribute sequence did not cause expected invalid attribute sequence error")
 	}
 }
 

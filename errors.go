@@ -12,6 +12,8 @@ const (
 	ErrMessageIntegritySHA256   = errorString("messageintegritysha256 check failed")
 	ErrUnknownPasswordAlgorithm = errorString("unknown password algorithm")
 
+	ErrUnexpectedEOF = errorString("unexpected EOF")
+
 	ErrUsernameTooLong       = errorString("username too long")
 	ErrRealmTooLong          = errorString("realm too long")
 	ErrNonceTooLong          = errorString("nonce too long")
@@ -23,6 +25,6 @@ const (
 	ErrReasonTooLong         = errorString("reason too long")
 	ErrDomainTooLong         = errorString("domain too long")
 
-	ErrAttrInvalidAttributeAppend          = errorString("invalid attribute appended after MessageIntegrity, MessageIntegritySHA256 or Fingerprint")
+	ErrInvalidAttributeSequence            = errorString("invalid attribute sequence")
 	ErrInvalidMessageIntegritySHA256Length = errorString("invalid MessageIntegritySHA256 length")
 )

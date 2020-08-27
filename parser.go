@@ -42,13 +42,16 @@ func Parse(in []byte) (Message, error) {
 		attrType, attrSize := attributeType(attr), attributeSize(attr)
 		attr = attr[4:]
 		if len(attr) < attrSize {
-			return nil, ErrMalformedAttribute
+			return nil, ErrUnexpectedEOF
 		}
 		switch attrType {
 
 		case attrFingerprint:
-			// fingerprint must be the last attribute, len(attr) != 4 provides that condition
-			if attrSize != 4 || len(attr) != 4 || !validateFingerprint(in[:bytesParsed], attr) {
+			// fingerprint must be the last attribute, len(attr) > 4 provides that condition
+			if len(attr) > 4 {
+				return nil, ErrInvalidAttributeSequence
+			}
+			if attrSize != 4 || !validateFingerprint(in[:bytesParsed], attr) {
 				return nil, ErrFingerprint
 			}
 
@@ -60,7 +63,7 @@ func Parse(in []byte) (Message, error) {
 				// Only fingerprint and messageintegritySHA256 attributes are allowed to follow messageintegrity attribute
 				a := attr[sha1.Size:]
 				if len(a) < fingerprintSize {
-					return nil, ErrMessageIntegrity
+					return nil, ErrUnexpectedEOF
 				}
 				switch attributeType(a) {
 				case attrFingerprint:
@@ -69,15 +72,21 @@ func Parse(in []byte) (Message, error) {
 				case attrMessageIntegritySHA256:
 					n := 4 + attributeSize(a)
 					if len(a) < n {
-						return nil, ErrMessageIntegrity
+						return nil, ErrUnexpectedEOF
 					}
-					if a = a[n:]; len(a) < fingerprintSize || attributeType(a) != attrFingerprint {
-						return nil, ErrMessageIntegrity
+					if a = a[n:]; len(a) > 0 {
+						if len(a) < fingerprintSize {
+							return nil, ErrUnexpectedEOF
+						}
+						if attributeType(a) != attrFingerprint {
+							return nil, ErrInvalidAttributeSequence
+						}
+						n += fingerprintSize
 					}
 					// ignore everything after messageintegritysha256 and fingerprint attributes
-					in = in[:bytesParsed+n+fingerprintSize]
+					in = in[:bytesParsed+4+sha1.Size+n]
 				default:
-					return nil, ErrMessageIntegrity
+					return nil, ErrInvalidAttributeSequence
 				}
 				attr = attr[:sha1.Size]
 			}
@@ -93,7 +102,7 @@ func Parse(in []byte) (Message, error) {
 			if len(attr) > attrSize {
 				// Only fingerprint attribute is allowed to follow messageintegritysha256 attribute
 				if a := attr[attrSize:]; len(a) < fingerprintSize || attributeType(a) != attrFingerprint {
-					return nil, ErrMessageIntegritySHA256
+					return nil, ErrInvalidAttributeSequence
 				}
 				// ignore everything after messageintegritysha256 and fingerprint attributes
 				in = in[:bytesParsed+4+attrSize+fingerprintSize]
