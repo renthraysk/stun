@@ -31,27 +31,30 @@ type Address struct {
 	buf [net.IPv6len]byte
 }
 
-func attrAddressFamily(attr []byte) byte { return attr[5] }
+func attrAddressFamily(attr []byte) byte { return attr[1] }
 
-func (a *Address) Unmarshal(m Message, attr []byte) error {
-	if len(attr) < 8+net.IPv4len {
-		return ErrMalformedAttribute
+func (a *Address) Unmarshal(raw []byte, attrType attr, attrValue []byte) error {
+	if len(attrValue) < 4+net.IPv4len {
+		return ErrUnexpectedEOF
 	}
 	n := net.IPv4len
-	if f := attrAddressFamily(attr); f == iPv6Family {
+	if f := attrAddressFamily(attrValue); f == iPv6Family {
 		n = net.IPv6len
 	} else if f != iPv4Family {
 		return ErrUnknownIPFamily
 	}
-	if len(attr) != 8+n || attributeSize(attr) != 4+n {
+	if len(attrValue) != 4+n {
+		return ErrUnexpectedEOF
+	}
+	if attributeSize(attrValue) != n {
 		return ErrMalformedAttribute
 	}
 	a.IP = a.buf[:n] // make([]byte, n)
-	copy(a.IP, attr[8:])
-	a.Port = binary.BigEndian.Uint16(attr[6:8])
-	switch attributeType(attr) {
+	copy(a.IP, attrValue[4:])
+	a.Port = binary.BigEndian.Uint16(attrValue[2:4])
+	switch attrType {
 	case attrXorMappedAddress:
-		for i, x := range m[4 : 4+n] { // m[4:4+n] spans magiccookie and transaction id if needed
+		for i, x := range raw[4 : 4+n] { // raw[4:4+n] spans magiccookie and transaction id if needed
 			a.IP[i] ^= x
 		}
 		a.Port ^= magicCookiePort

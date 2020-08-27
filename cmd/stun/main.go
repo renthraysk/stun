@@ -72,8 +72,8 @@ func bindingRequest(ctx context.Context, conn *net.UDPConn) error {
 	if err != nil {
 		return err
 	}
-	m, err := stun.Parse(in[:n:n])
-	if err == nil {
+	var m stun.Message
+	if err := m.Unmarshal(in[:n:n]); err == nil {
 		_ = m
 	}
 	return err

@@ -20,26 +20,40 @@ const (
 
 type TxID [12]byte
 
+type Message struct {
+	typ  Type
+	txID TxID
+}
+
+func (m *Message) Type() Type        { return m.typ }
+func (m *Message) TxID() (txID TxID) { copy(txID[:], m.txID[:]); return }
+func (m *Message) Reset() {
+	m.typ = 0
+	for i := range m.txID[:] {
+		m.txID[i] = 0
+	}
+}
+
 func Serve(pc net.PacketConn) {
 	buf := make([]byte, 4*1024)
+
+	var m Message
+
 	for {
 		n, addr, err := pc.ReadFrom(buf)
 		if err != nil {
 			continue
 		}
-		m, err := Parse(buf[:n:n])
-		if err != nil {
+		if err := m.Unmarshal(buf[:n:n]); err != nil {
 			continue
 		}
 		switch m.Type() {
 		case TypeBindingRequest:
 			b := New(TypeBindingSuccess, m.TxID())
 			b.AppendXorMappingAddress(addr.(*net.UDPAddr))
-			if err == nil {
-				if b, err := b.Bytes(); err != nil {
-					if _, err := pc.WriteTo(b, addr); err != nil {
-						// @TODO?
-					}
+			if raw, err := b.Bytes(); err == nil {
+				if _, err := pc.WriteTo(raw, addr); err != nil {
+					// @TODO?
 				}
 			}
 		}

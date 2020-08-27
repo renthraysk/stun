@@ -65,15 +65,17 @@ func TestBuilderTruncatedMessageIntegritySHA256(t *testing.T) {
 		{n: 33, err: ErrInvalidMessageIntegritySHA256Length}, // oversized
 	}
 
+	var m Message
+
 	for _, tt := range tests {
 		b := New(TypeBindingRequest, testTxID)
 		b.AppendMessageIntegritySHA256Truncated(testKey, tt.n)
-		m, err := b.Bytes()
+		raw, err := b.Bytes()
 		if err != tt.err {
 			t.Fatalf("build: expected error %v, got %v", tt.err, err)
 		}
 		if err == nil {
-			if _, err := Parse(m); err != nil {
+			if err := m.Unmarshal(raw); err != nil {
 				t.Fatalf("parse error: %v", err)
 			}
 		}
