@@ -2,10 +2,16 @@ package stun
 
 import (
 	"crypto/sha256"
+	"encoding/binary"
 	"testing"
 )
 
 var txID TxID
+
+// setAttrSize fix the attrsSize attribute
+func setAttrSize(m []byte) {
+	binary.BigEndian.PutUint16(m[2:4], uint16(len(m)-headerSize))
+}
 
 func TestRFC5769(t *testing.T) {
 	t.Skip("@TODO key generation")

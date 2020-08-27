@@ -143,7 +143,3 @@ func validateHMAC(m []byte, a []byte, h func() hash.Hash, key []byte) bool {
 	x := mac.Sum(b[:0])
 	return hmac.Equal(a, x[:n])
 }
-
-func setAttrSize(m []byte) {
-	binary.BigEndian.PutUint16(m[2:4], uint16(len(m)-headerSize))
-}
