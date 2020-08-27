@@ -47,7 +47,6 @@ func New(t Type, txID TxID) *Builder {
 
 // See https://tools.ietf.org/html/rfc8489#section-14.1
 func (b *Builder) AppendMappingAddress(addr *net.UDPAddr) {
-
 	if b.state > stOpen {
 		if b.state < stErrInvalidAttributeAppend {
 			b.state = stErrInvalidAttributeAppend
@@ -236,39 +235,45 @@ func (b *Builder) AppendUnknownAttributes(attributes ...uint16) {
 func (b *Builder) AppendSoftware(software string) {
 	const maxByteLength = 763
 
-	if b.state == stOpen {
-		if len(software) > maxByteLength {
-			b.state = stErrSoftwareTooLong
-			return
+	if b.state > stOpen {
+		if b.state < stErrInvalidAttributeAppend {
+			b.state = stErrInvalidAttributeAppend
 		}
-		b.msg = appendSoftware(b.msg, software)
-	} else if b.state < stErrInvalidAttributeAppend {
-		b.state = stErrInvalidAttributeAppend
+		return
 	}
+	if len(software) > maxByteLength {
+		b.state = stErrSoftwareTooLong
+		return
+	}
+	b.msg = appendSoftware(b.msg, software)
 }
 
 // See https://tools.ietf.org/html/rfc8489#section-14.15
 func (b *Builder) AppendAlternateServer(ip net.IP, port uint16) {
-	if b.state == stOpen {
-		b.msg = appendAlternateServer(b.msg, ip, port)
-	} else if b.state < stErrInvalidAttributeAppend {
-		b.state = stErrInvalidAttributeAppend
+	if b.state > stOpen {
+		if b.state < stErrInvalidAttributeAppend {
+			b.state = stErrInvalidAttributeAppend
+		}
+		return
 	}
+	b.msg = appendAlternateServer(b.msg, ip, port)
 }
 
 // See https://tools.ietf.org/html/rfc8489#section-14.16
 func (b *Builder) AppendAlternateDomain(domain string) {
 	const maxDomainLength = 255
 
-	if b.state == stOpen {
-		if len(domain) > maxDomainLength {
-			b.state = stErrDomainTooLong
-			return
+	if b.state > stOpen {
+		if b.state < stErrInvalidAttributeAppend {
+			b.state = stErrInvalidAttributeAppend
 		}
-		b.msg = appendAlternateDomain(b.msg, domain)
-	} else if b.state < stErrInvalidAttributeAppend {
-		b.state = stErrInvalidAttributeAppend
+		return
 	}
+	if len(domain) > maxDomainLength {
+		b.state = stErrDomainTooLong
+		return
+	}
+	b.msg = appendAlternateDomain(b.msg, domain)
 }
 
 // Bytes return the raw STUN message or an error if one occurred during it's building.
