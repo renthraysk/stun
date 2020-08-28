@@ -1,45 +1,31 @@
 package stun
 
 import (
+	"crypto/md5"
 	"crypto/sha256"
 	"encoding/binary"
+	"hash"
 	"net"
+)
+
+const (
+	maxUsernameByteLength = 513
+	maxRealmByteLength    = 763
 )
 
 // @TODO Enforce attributes to each STUN message class they belong
 // @TODO Check for duplicate attributes appended?
 
-/*
-	state enforces the structure of the STUN message.
-
-	Most attributes can appear in any order.
-	If Fingerprint attribute is present it must be the last.
-	If MessageIntegritySHA256 attribute is present it must be last or succeeded by a Fingerprint attribute
-	If MessageIntegrity attribute is present it must be last or succeeded by a MessageIntegritySHA256 or Fingerprint or both.
-*/
-type state uint
-
-const (
-	stOpen state = iota
-	stMessageIntegrity
-	stMessageIntegritySHA256
-	stFingerprint
-	stErrInvalidAttributeAppend // Must be first error state
-	stErrInvalidMessageIntegritySHA256Length
-	stErrUsernameTooLong
-	stErrSoftwareTooLong
-	stErrRealmTooLong
-	stErrNonceTooLong
-	stErrInvalidErrorCode
-	stErrReasonTooLong
-	stErrInvalidUserHashLength
-	stErrDomainTooLong
-	stErrInvalidIPAddress
-)
-
 type Builder struct {
-	state
-	msg []byte
+	err              error
+	msg              []byte
+	messageIntegrity struct {
+		key []byte
+	}
+	messageIntegritySHA256 struct {
+		key []byte
+	}
+	addFingerprint bool
 }
 
 func New(t Type, txID TxID) *Builder {
@@ -47,271 +33,265 @@ func New(t Type, txID TxID) *Builder {
 }
 
 // See https://tools.ietf.org/html/rfc8489#section-14.1
-func (b *Builder) AppendMappingAddress(addr *net.UDPAddr) {
-	if b.state > stOpen {
-		if b.state < stErrInvalidAttributeAppend {
-			b.state = stErrInvalidAttributeAppend
-		}
+func (b *Builder) SetMappingAddress(addr *net.UDPAddr) {
+	if b.err != nil {
 		return
 	}
 	if len(addr.IP) != net.IPv4len && len(addr.IP) != net.IPv6len {
-		b.state = stErrInvalidIPAddress
+		b.err = ErrInvalidIPAddress
 		return
 	}
 	b.msg = appendMappedAddress(b.msg, addr.IP, uint16(addr.Port))
 }
 
 // https://tools.ietf.org/html/rfc8489#section-14.2
-func (b *Builder) AppendXorMappingAddress(addr *net.UDPAddr) {
-	if b.state > stOpen {
-		if b.state < stErrInvalidAttributeAppend {
-			b.state = stErrInvalidAttributeAppend
-		}
+func (b *Builder) SetXorMappingAddress(addr *net.UDPAddr) {
+	if b.err != nil {
 		return
 	}
 	if len(addr.IP) != net.IPv4len && len(addr.IP) != net.IPv6len {
-		b.state = stErrInvalidIPAddress
+		b.err = ErrInvalidIPAddress
 		return
 	}
 	b.msg = appendXorMappedAddress(b.msg, addr.IP, uint16(addr.Port))
 }
 
 // See https://tools.ietf.org/html/rfc8489#section-14.3
-func (b *Builder) AppendUsername(username string) {
-	const maxByteLength = 513
-
-	if b.state > stOpen {
-		if b.state < stErrInvalidAttributeAppend {
-			b.state = stErrInvalidAttributeAppend
-		}
+func (b *Builder) SetUsername(username string) {
+	if b.err != nil {
 		return
 	}
-	if len(username) > maxByteLength {
-		b.state = stErrUsernameTooLong
+	if len(username) > maxUsernameByteLength {
+		b.err = ErrUsernameTooLong
 		return
 	}
 	b.msg = appendUsername(b.msg, username)
 }
 
 // See https://tools.ietf.org/html/rfc8489#section-14.4
-func (b *Builder) AppendUserHash(userHash []byte) {
-	if b.state > stOpen {
-		if b.state < stErrInvalidAttributeAppend {
-			b.state = stErrInvalidAttributeAppend
-		}
+func (b *Builder) SetUserHash(username, realm string) {
+	if b.err != nil {
 		return
 	}
-	if len(userHash) != sha256.Size {
-		b.state = stErrInvalidUserHashLength
+	var buf [64]byte
+	if len(username) > maxUsernameByteLength {
+		b.err = ErrUsernameTooLong
 		return
 	}
-	b.msg = appendUserHash(b.msg, userHash)
+	if len(realm) > maxRealmByteLength {
+		b.err = ErrRealmTooLong
+		return
+	}
+	data := append(buf[:0], username...)
+	data = append(data, ':')
+	data = append(data, realm...)
+	b.msg = appendUserHash(b.msg, sha256.Sum256(data))
 }
 
 // See https://tools.ietf.org/html/rfc8489#section-14.5
-func (b *Builder) AppendMessageIntegrity(key []byte) {
-	if b.state >= stMessageIntegrity {
-		if b.state < stErrInvalidAttributeAppend {
-			b.state = stErrInvalidAttributeAppend
-		}
+func (b *Builder) AddMessageIntegrity(key []byte) {
+	if b.err != nil {
 		return
 	}
-	b.state = stMessageIntegrity
-	b.msg = appendMessageIntegrity(b.msg, key)
+	b.messageIntegrity.key = append(b.messageIntegrity.key[:0], key...)
 }
 
-// AppendMessageIntegritySHA256 appends a MessageIntegritySHA256 attribute.
-func (b *Builder) AppendMessageIntegritySHA256(key []byte) {
-	b.AppendMessageIntegritySHA256Truncated(key, sha256.Size)
+// AddLongTermMessageIntegrity
+// Will automatically add a PasswordAlgorithm attribute if passwordAlgorithm is anything other than PasswordAlgorithmMD5
+func (b *Builder) AddLongTermMessageIntegrity(passwordAlgorithm PasswordAlgorithm, username, realm, password string) {
+	if b.err != nil {
+		return
+	}
+	if len(username) > maxUsernameByteLength {
+		b.err = ErrUsernameTooLong
+		return
+	}
+	if len(realm) > maxRealmByteLength {
+		b.err = ErrRealmTooLong
+		return
+	}
+
+	var h hash.Hash
+	switch passwordAlgorithm {
+	case PasswordAlgorithmMD5:
+		h = md5.New()
+
+	case PasswordAlgorithmSHA256:
+		h = sha256.New()
+		b.msg = appendPasswordAlgorithm(b.msg, PasswordAlgorithmSHA256, nil)
+
+	default:
+		b.err = ErrUnknownPasswordAlgorithm
+		return
+	}
+
+	data := make([]byte, 0, len(username)+1+len(realm)+1+len(password))
+	data = append(data, username...)
+	data = append(data, ':')
+	data = append(data, realm...)
+	data = append(data, ':')
+	data = append(data, password...)
+	h.Write(data)
+	b.messageIntegrity.key = h.Sum(b.messageIntegrity.key[:0])
 }
 
-// AppendMessageIntegritySHA256Truncated appends an optionally truncated MessageIntegritySHA256 attribute.
-// n the length of the attribute should be between 16 and 32 inclusive, and be divisible by 4.
+// SetMessageIntegritySHA256 appends a MessageIntegritySHA256 attribute.
+func (b *Builder) AddMessageIntegritySHA256(key []byte) {
+	b.AddMessageIntegritySHA256Truncated(key, sha256.Size)
+}
+
+// SetMessageIntegritySHA256Truncated appends an optionally truncated MessageIntegritySHA256 attribute.
+// length the length of the attribute should be between 16 and 32 inclusive, and be divisible by 4.
 // See https://tools.ietf.org/html/rfc8489#section-14.6
-func (b *Builder) AppendMessageIntegritySHA256Truncated(key []byte, n int) {
-	if b.state >= stMessageIntegritySHA256 {
-		if b.state < stErrInvalidAttributeAppend {
-			b.state = stErrInvalidAttributeAppend
-		}
+func (b *Builder) AddMessageIntegritySHA256Truncated(key []byte, length int) {
+	if b.err != nil {
 		return
 	}
-	if n > sha256.Size || n < 16 || n%4 != 0 {
-		b.state = stErrInvalidMessageIntegritySHA256Length
+	if length > sha256.Size || length < 16 || length%4 != 0 {
+		b.err = ErrInvalidMessageIntegritySHA256Length
 		return
 	}
-	b.state = stMessageIntegritySHA256
-	b.msg = appendMessageIntegritySHA256(b.msg, key, n)
+	b.messageIntegritySHA256.key = append(b.messageIntegritySHA256.key[:0], key...)
 }
 
-// AppendSoftware appends Software attribute to the STUN message.
+// SetSoftware appends Software attribute to the STUN message.
 // Must be the last attribute appended to a STUN message.
 // See https://tools.ietf.org/html/rfc8489#section-14.7
-func (b *Builder) AppendFingerprint() {
-	if b.state >= stFingerprint {
-		if b.state < stErrInvalidAttributeAppend {
-			b.state = stErrInvalidAttributeAppend
-		}
-		return
-	}
-	b.state = stFingerprint
-	b.msg = appendFingerprint(b.msg)
+func (b *Builder) AddFingerprint() {
+	b.addFingerprint = true
 }
 
 // See https://tools.ietf.org/html/rfc8489#section-14.8
-func (b *Builder) AppendErrorCode(errorCode ErrorCode, reason string) {
-	const maxByteLength = 763
+func (b *Builder) SetErrorCode(errorCode ErrorCode, reason string) {
+	const maxReasonByteLength = 763
 
-	if b.state > stOpen {
-		if b.state < stErrInvalidAttributeAppend {
-			b.state = stErrInvalidAttributeAppend
-		}
+	if b.err != nil {
 		return
 	}
 	if errorCode < 300 || errorCode > 699 {
-		b.state = stErrInvalidErrorCode
+		b.err = ErrInvalidErrorCode
 		return
 	}
-	if len(reason) > maxByteLength {
-		b.state = stErrReasonTooLong
+	if len(reason) > maxReasonByteLength {
+		b.err = ErrReasonTooLong
 		return
 	}
 	b.msg = appendErrorCode(b.msg, errorCode, reason)
 }
 
 // See https://tools.ietf.org/html/rfc8489#section-14.9
-func (b *Builder) AppendRealm(realm string) {
-	const maxByteLength = 763
-
-	if b.state > stOpen {
-		if b.state < stErrInvalidAttributeAppend {
-			b.state = stErrInvalidAttributeAppend
-		}
+func (b *Builder) SetRealm(realm string) {
+	if b.err != nil {
 		return
 	}
-	if len(realm) > maxByteLength {
-		b.state = stErrRealmTooLong
+	if len(realm) > maxRealmByteLength {
+		b.err = ErrRealmTooLong
 		return
 	}
 	b.msg = appendRealm(b.msg, realm)
 }
 
 // See https://tools.ietf.org/html/rfc8489#section-14.10
-func (b *Builder) AppendNonce(nonce []byte) {
-	const maxByteLength = 763
+func (b *Builder) SetNonce(nonce []byte) {
+	const maxNonceByteLength = 763
 
-	if b.state > stOpen {
-		if b.state < stErrInvalidAttributeAppend {
-			b.state = stErrInvalidAttributeAppend
-		}
+	if b.err != nil {
 		return
 	}
-	if len(nonce) > maxByteLength {
-		b.state = stErrNonceTooLong
+	if len(nonce) > maxNonceByteLength {
+		b.err = ErrNonceTooLong
 		return
 	}
 	b.msg = appendNonce(b.msg, nonce)
 }
 
 // See https://tools.ietf.org/html/rfc8489#section-14.11
-func (b *Builder) AppendPasswordAlgorithms() {
+func (b *Builder) SetPasswordAlgorithms() {
 	// @TODO
 }
 
-// See https://tools.ietf.org/html/rfc8489#section-14.12
-func (b *Builder) AppendPasswordAlgorithm(passwordAlgorithm PasswordAlgorithm, parameters []byte) {
-	if b.state > stOpen {
-		if b.state < stErrInvalidAttributeAppend {
-			b.state = stErrInvalidAttributeAppend
-		}
-		return
-	}
-	b.msg = appendPasswordAlgorithm(b.msg, passwordAlgorithm, parameters)
-}
-
 // See https://tools.ietf.org/html/rfc8489#section-14.13
-func (b *Builder) AppendUnknownAttributes(attributes ...uint16) {
-	if b.state > stOpen {
-		if b.state < stErrInvalidAttributeAppend {
-			b.state = stErrInvalidAttributeAppend
-		}
+func (b *Builder) SetUnknownAttributes(attributes ...uint16) {
+	if b.err != nil {
 		return
 	}
 	b.msg = appendUnknownAttributes(b.msg, attributes)
 }
 
-// AppendSoftware appends Software attribute to the STUN message
+// SetSoftware appends Software attribute to the STUN message
 // See https://tools.ietf.org/html/rfc8489#section-14.14
-func (b *Builder) AppendSoftware(software string) {
-	const maxByteLength = 763
+func (b *Builder) SetSoftware(software string) {
+	const maxSoftwareByteLength = 763
 
-	if b.state > stOpen {
-		if b.state < stErrInvalidAttributeAppend {
-			b.state = stErrInvalidAttributeAppend
-		}
+	if b.err != nil {
 		return
 	}
-	if len(software) > maxByteLength {
-		b.state = stErrSoftwareTooLong
+	if len(software) > maxSoftwareByteLength {
+		b.err = ErrSoftwareTooLong
 		return
 	}
 	b.msg = appendSoftware(b.msg, software)
 }
 
 // See https://tools.ietf.org/html/rfc8489#section-14.15
-func (b *Builder) AppendAlternateServer(ip net.IP, port uint16) {
-	if b.state > stOpen {
-		if b.state < stErrInvalidAttributeAppend {
-			b.state = stErrInvalidAttributeAppend
-		}
+func (b *Builder) SetAlternateServer(ip net.IP, port uint16) {
+	if b.err != nil {
 		return
 	}
 	if len(ip) != net.IPv4len && len(ip) != net.IPv6len {
-		b.state = stErrInvalidIPAddress
+		b.err = ErrInvalidIPAddress
 		return
 	}
 	b.msg = appendAlternateServer(b.msg, ip, port)
 }
 
 // See https://tools.ietf.org/html/rfc8489#section-14.16
-func (b *Builder) AppendAlternateDomain(domain string) {
-	const maxDomainLength = 255
+func (b *Builder) SetAlternateDomain(domain string) {
+	const maxAlternateDomainByteLength = 255
 
-	if b.state > stOpen {
-		if b.state < stErrInvalidAttributeAppend {
-			b.state = stErrInvalidAttributeAppend
-		}
+	if b.err != nil {
 		return
 	}
-	if len(domain) > maxDomainLength {
-		b.state = stErrDomainTooLong
+	if len(domain) > maxAlternateDomainByteLength {
+		b.err = ErrDomainTooLong
 		return
 	}
 	b.msg = appendAlternateDomain(b.msg, domain)
 }
 
-var errMap = [...]error{
-	stErrInvalidAttributeAppend:              ErrInvalidAttributeSequence,
-	stErrInvalidMessageIntegritySHA256Length: ErrInvalidMessageIntegritySHA256Length,
-	stErrUsernameTooLong:                     ErrUsernameTooLong,
-	stErrRealmTooLong:                        ErrRealmTooLong,
-	stErrNonceTooLong:                        ErrNonceTooLong,
-	stErrInvalidErrorCode:                    ErrInvalidErrorCode,
-	stErrReasonTooLong:                       ErrReasonTooLong,
-	stErrInvalidUserHashLength:               ErrInvalidUserHashLength,
-	stErrDomainTooLong:                       ErrDomainTooLong,
-	stErrInvalidIPAddress:                    ErrInvalidIPAddress,
+func (b *Builder) SetPriority(typePref uint8, localPref uint16, componentID uint8) {
+	if b.err != nil {
+		return
+	}
+	if componentID < 1 {
+		b.err = ErrInvalidPriorityComponentID
+		return
+	}
+	b.msg = appendPriority(b.msg, typePref, localPref, componentID)
 }
 
-// Bytes return the raw STUN message or an error if one occurred during it's building.
-func (b *Builder) Bytes() ([]byte, error) {
-	if b.state < stErrInvalidAttributeAppend {
-		binary.BigEndian.PutUint16(b.msg[2:4], uint16(len(b.msg)-headerSize))
-		return b.msg, nil
+func (b *Builder) SetICEControlled(r uint64) {
+	if b.err != nil {
+		return
 	}
-	if int(b.state) < len(errMap) {
-		if err := errMap[b.state]; err != nil {
-			return nil, err
-		}
+	b.msg = appendICEControlled(b.msg, r)
+}
+
+// Build return the raw STUN message or an error if one occurred during it's building.
+func (b *Builder) Build() ([]byte, error) {
+	if b.err != nil {
+		return nil, b.err
 	}
-	panic("Builder error state not mapped to an error")
+	m := b.msg
+	if len(b.messageIntegrity.key) != 0 {
+		m = appendMessageIntegrity(m, b.messageIntegrity.key)
+	}
+	if len(b.messageIntegritySHA256.key) != 0 {
+		m = appendMessageIntegritySHA256(m, b.messageIntegritySHA256.key)
+	}
+	if b.addFingerprint {
+		m = appendFingerprint(m)
+	}
+	binary.BigEndian.PutUint16(m[2:4], uint16(len(m)-headerSize))
+	return m, nil
 }

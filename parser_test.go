@@ -1,7 +1,6 @@
 package stun
 
 import (
-	"crypto/sha256"
 	"encoding/binary"
 	"testing"
 )
@@ -13,38 +12,11 @@ func setAttrSize(m []byte) {
 	binary.BigEndian.PutUint16(m[2:4], uint16(len(m)-headerSize))
 }
 
-func TestRFC5769(t *testing.T) {
-	t.Skip("@TODO key generation")
-
-	in := []byte("\x00\x01\x00\x58" +
-		"\x21\x12\xa4\x42" +
-		"\xb7\xe7\xa7\x01\xbc\x34\xd6\x86\xfa\x87\xdf\xae" +
-		"\x80\x22\x00\x10" +
-		"STUN test client" +
-		"\x00\x24\x00\x04" +
-		"\x6e\x00\x01\xff" +
-		"\x80\x29\x00\x08" +
-		"\x93\x2f\xf9\xb1\x51\x26\x3b\x36" +
-		"\x00\x06\x00\x09" +
-		"\x65\x76\x74\x6a\x3a\x68\x36\x76\x59\x20\x20\x20" +
-		"\x00\x08\x00\x14" +
-		"\x9a\xea\xa7\x0c\xbf\xd8\xcb\x56\x78\x1e\xf2\xb5" +
-		"\xb2\xd3\xf2\x49\xc1\xb5\x71\xa2" +
-		"\x80\x28\x00\x04" +
-		"\xe5\x7a\x3b\xcf")
-
-	var m Message
-
-	if err := m.Unmarshal(in); err != nil {
-		t.Fatalf("parse failed: %v", err)
-	}
-}
-
 func TestParseFingerprint(t *testing.T) {
 
 	b := New(TypeBindingRequest, txID)
-	b.AppendFingerprint()
-	raw, err := b.Bytes()
+	b.AddFingerprint()
+	raw, err := b.Build()
 	if err != nil {
 		t.Fatalf("build failed: %v", err)
 	}
@@ -69,8 +41,8 @@ func TestParseFingerprint(t *testing.T) {
 func TestParseMessageIntegrity(t *testing.T) {
 
 	b := New(TypeBindingRequest, txID)
-	b.AppendMessageIntegrity(key)
-	raw, err := b.Bytes()
+	b.AddMessageIntegrity(key)
+	raw, err := b.Build()
 	if err != nil {
 		t.Fatalf("build failed: %v", err)
 	}
@@ -94,8 +66,8 @@ func TestParseMessageIntegrity(t *testing.T) {
 
 func TestParseMessageIntegritySHA256(t *testing.T) {
 	b := New(TypeBindingRequest, txID)
-	b.AppendMessageIntegritySHA256(key)
-	raw, err := b.Bytes()
+	b.AddMessageIntegritySHA256(key)
+	raw, err := b.Build()
 	if err != nil {
 		t.Fatalf("build failed: %v", err)
 	}
@@ -117,9 +89,9 @@ func TestParseMessageIntegritySHA256(t *testing.T) {
 
 func TestParseMessageIntegritySHA256Fingerprint(t *testing.T) {
 	b := New(TypeBindingRequest, txID)
-	b.AppendMessageIntegritySHA256(key)
-	b.AppendFingerprint()
-	raw, err := b.Bytes()
+	b.AddMessageIntegritySHA256(key)
+	b.AddFingerprint()
+	raw, err := b.Build()
 	if err != nil {
 		t.Fatalf("build failed: %v", err)
 	}
@@ -158,7 +130,7 @@ func TestParseMessageIntegrityFollowedByMessageIntegrity256IsAllowed(t *testing.
 	// MessageIntegrity followed by MessageIntegrity256 is allowed
 	raw := newHeader(nil, TypeBindingRequest, txID)
 	raw = appendMessageIntegrity(raw, key)
-	raw = appendMessageIntegritySHA256(raw, key, sha256.Size)
+	raw = appendMessageIntegritySHA256(raw, key)
 	setAttrSize(raw)
 
 	var m Message
@@ -183,7 +155,7 @@ func TestParseMessageIntegrityShouldBeOnlyFollowedByFingerprint(t *testing.T) {
 func TestParseMessageIntegritySHA256ShouldBeOnlyFollowedByFingerprint(t *testing.T) {
 	// Only attribute allowed after a MessageIntegritySHA256 is Fingerprint
 	raw := newHeader(nil, TypeBindingRequest, txID)
-	raw = appendMessageIntegritySHA256(raw, key, sha256.Size)
+	raw = appendMessageIntegritySHA256(raw, key)
 	raw = appendSoftware(raw, "test")
 	setAttrSize(raw)
 	var m Message
@@ -196,7 +168,7 @@ func TestParseFingerprintShouldBeLastAttribute(t *testing.T) {
 	// Fingerprint should be last attribute
 	raw := newHeader(nil, TypeBindingRequest, txID)
 	raw = appendFingerprint(raw)
-	raw = appendMessageIntegritySHA256(raw, key, sha256.Size)
+	raw = appendMessageIntegritySHA256(raw, key)
 	setAttrSize(raw)
 
 	var m Message
@@ -207,8 +179,8 @@ func TestParseFingerprintShouldBeLastAttribute(t *testing.T) {
 
 func BenchmarkParseMessageFingerprint(b *testing.B) {
 	bb := New(TypeBindingRequest, txID)
-	bb.AppendFingerprint()
-	raw, err := bb.Bytes()
+	bb.AddFingerprint()
+	raw, err := bb.Build()
 	if err != nil {
 		b.Fatalf("build failed: %v", err)
 	}
@@ -222,8 +194,8 @@ func BenchmarkParseMessageFingerprint(b *testing.B) {
 
 func BenchmarkParseMessageIntegrity(b *testing.B) {
 	bb := New(TypeBindingRequest, txID)
-	bb.AppendMessageIntegrity(key)
-	raw, err := bb.Bytes()
+	bb.AddMessageIntegrity(key)
+	raw, err := bb.Build()
 	if err != nil {
 		b.Fatalf("build failed: %v", err)
 	}
@@ -237,8 +209,8 @@ func BenchmarkParseMessageIntegrity(b *testing.B) {
 
 func BenchmarkParseMessageIntegritySHA256(b *testing.B) {
 	bb := New(TypeBindingRequest, txID)
-	bb.AppendMessageIntegritySHA256(key)
-	raw, err := bb.Bytes()
+	bb.AddMessageIntegritySHA256(key)
+	raw, err := bb.Build()
 	if err != nil {
 		b.Fatalf("build failed: %v", err)
 	}

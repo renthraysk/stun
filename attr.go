@@ -1,12 +1,7 @@
 package stun
 
 import (
-	"crypto/hmac"
-	"crypto/sha1"
 	"crypto/sha256"
-	"encoding/binary"
-	"hash"
-	"hash/crc32"
 )
 
 /*
@@ -46,6 +41,8 @@ const (
 	attrSoftware           attr = 0x8022
 	attrAlternateServer    attr = 0x8023
 	attrFingerprint        attr = 0x8028
+	attrICEControlled      attr = 0x8029
+	attrICEControlling     attr = 0x802A
 )
 
 type PasswordAlgorithm uint16
@@ -55,15 +52,7 @@ const (
 	PasswordAlgorithmSHA256 PasswordAlgorithm = 0x0002
 )
 
-const (
-	fingerprintSize        = 8
-	fingerprintXor  uint32 = 0x5354554e
-)
-
-var (
-	zeroPad = [4]byte{0, 0, 0, 0}
-	colon   = [1]byte{':'}
-)
+var zeroPad [sha256.Size]byte
 
 func newHeader(buf []byte, t Type, txID [12]byte) []byte {
 	m := append(buf[:0], byte(t>>8), byte(t), 0, 0, byte(magicCookie>>24), byte(magicCookie>>16&0xFF), byte(magicCookie>>8&0xFF), byte(magicCookie&0xFF))
@@ -94,17 +83,16 @@ func appendAttributeUint32(m []byte, a attr, x uint32) []byte {
 	return append(m, byte(a>>8), byte(a), 0, 4, byte(x>>24), byte(x>>16), byte(x>>8), byte(x))
 }
 
+func appendAttributeUint64(m []byte, a attr, x uint64) []byte {
+	return append(m, byte(a>>8), byte(a), 0, 8, byte(x>>56), byte(x>>48), byte(x>>40), byte(x>>32), byte(x>>24), byte(x>>16), byte(x>>8), byte(x))
+}
+
 func appendUsername(m []byte, username string) []byte {
 	return appendAttributeString(m, attrUsername, username)
 }
 
 func appendSoftware(m []byte, s string) []byte {
 	return appendAttributeString(m, attrSoftware, s)
-}
-
-func appendFingerprint(m []byte) []byte {
-	binary.BigEndian.PutUint16(m[2:4], uint16(len(m)-headerSize+fingerprintSize))
-	return appendAttributeUint32(m, attrFingerprint, crc32.ChecksumIEEE(m)^fingerprintXor)
 }
 
 func appendRealm(m []byte, r string) []byte {
@@ -115,8 +103,8 @@ func appendNonce(m []byte, nonce []byte) []byte {
 	return appendAttribute(m, attrNonce, nonce)
 }
 
-func appendUserHash(m []byte, userhash []byte) []byte {
-	return appendAttribute(m, attrUserHash, userhash)
+func appendUserHash(m []byte, userhash [sha256.Size]byte) []byte {
+	return appendAttribute(m, attrUserHash, userhash[:])
 }
 
 //go:generate stringer -type ErrorCode -trimprefix ErrorCode
@@ -168,22 +156,12 @@ func appendAlternateDomain(m []byte, domain string) []byte {
 	return appendAttributeString(m, attrAlternateDomain, domain)
 }
 
-func appendHMAC(m []byte, a attr, h func() hash.Hash, key []byte, n int) []byte {
-	binary.BigEndian.PutUint16(m[2:4], uint16(len(m)-headerSize+4+n))
-	mac := hmac.New(h, key)
-	mac.Write(m)
-	m = append(m, byte(a>>8), byte(a), byte(n>>8), byte(n))
-	m = mac.Sum(m)
-	if n < mac.Size() {
-		return m[:len(m)-mac.Size()+n]
-	}
-	return m
+func appendPriority(m []byte, typePref uint8, localPref uint16, componentID uint8) []byte {
+	return appendAttributeUint32(m, attrPriority, uint32(typePref)<<24|uint32(localPref)<<8|(256-uint32(componentID)))
 }
 
-func appendMessageIntegrity(m []byte, key []byte) []byte {
-	return appendHMAC(m, attrMessageIntegrity, sha1.New, key, sha1.Size)
+func appendICEControlled(m []byte, r uint64) []byte {
+	return appendAttributeUint64(m, attrICEControlled, r)
 }
 
-func appendMessageIntegritySHA256(m []byte, key []byte, n int) []byte {
-	return appendHMAC(m, attrMessageIntegritySHA256, sha256.New, key, n)
-}
+//

@@ -50,8 +50,8 @@ func Serve(pc net.PacketConn) {
 		switch m.Type() {
 		case TypeBindingRequest:
 			b := New(TypeBindingSuccess, m.TxID())
-			b.AppendXorMappingAddress(addr.(*net.UDPAddr))
-			if raw, err := b.Bytes(); err == nil {
+			b.SetXorMappingAddress(addr.(*net.UDPAddr))
+			if raw, err := b.Build(); err == nil {
 				if _, err := pc.WriteTo(raw, addr); err != nil {
 					// @TODO?
 				}

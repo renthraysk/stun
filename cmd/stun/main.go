@@ -56,8 +56,8 @@ func bindingRequest(ctx context.Context, conn *net.UDPConn) error {
 		return err
 	}
 	b := stun.New(stun.TypeBindingRequest, txID)
-	b.AppendSoftware("test")
-	r, err := b.Bytes()
+	b.SetSoftware("test")
+	r, err := b.Build()
 	if err != nil {
 		return err
 	}

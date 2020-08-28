@@ -1,12 +1,9 @@
 package stun
 
 import (
-	"crypto/hmac"
 	"crypto/sha1"
 	"crypto/sha256"
 	"encoding/binary"
-	"hash"
-	"hash/crc32"
 )
 
 func attributeType(a []byte) attr { return attr(binary.BigEndian.Uint16(a[:2])) }
@@ -49,7 +46,7 @@ func (m *Message) Unmarshal(in []byte) error {
 			if len(attrValue) > 4 {
 				return ErrInvalidAttributeSequence
 			}
-			if !validateFingerprint(in[:bytesParsed], attrValue) {
+			if !validateFingerprint(in[:bytesParsed], attrValue[:4]) {
 				return ErrFingerprint
 			}
 
@@ -118,28 +115,4 @@ func (m *Message) Unmarshal(in []byte) error {
 	copy(m.txID[:], in[8:])
 
 	return nil
-}
-
-// validateFingerprint is called when fingerprint attribute is encountered.
-// m slice spans the STUN message header plus all currently parsed attributes
-// a slice spans the fingerprint attribute
-func validateFingerprint(m []byte, a []byte) bool {
-	// fingerprint attribute is always last so header size is correct
-	return crc32.ChecksumIEEE(m)^binary.BigEndian.Uint32(a) == fingerprintXor
-}
-
-// validateHMAC is called when either MessageIntegrity or MessageIntegritySHA256 attribute is encountered.
-// m slice spans the STUN message header plus all currently parsed attributes
-// a slice spans the MessageIntegrity/SHA256 attribute
-func validateHMAC(m []byte, a []byte, h func() hash.Hash, key []byte) bool {
-	var b [sha256.Size]byte
-
-	n := len(a)
-	binary.BigEndian.PutUint16(b[:2], uint16(len(m)-headerSize+4+n))
-	mac := hmac.New(h, key)
-	mac.Write(m[:2]) // STUN message type
-	mac.Write(b[:2]) // patched STUN header attr length
-	mac.Write(m[4:]) // rest of STUN message
-	x := mac.Sum(b[:0])
-	return hmac.Equal(a, x[:n])
 }
