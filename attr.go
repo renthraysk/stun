@@ -52,7 +52,7 @@ const (
 	PasswordAlgorithmSHA256 PasswordAlgorithm = 0x0002
 )
 
-var zeroPad [sha256.Size]byte
+var zeroPad [4]byte
 
 func newHeader(buf []byte, t Type, txID [12]byte) []byte {
 	m := append(buf[:0], byte(t>>8), byte(t), 0, 0, byte(magicCookie>>24), byte(magicCookie>>16&0xFF), byte(magicCookie>>8&0xFF), byte(magicCookie&0xFF))
