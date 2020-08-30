@@ -18,6 +18,7 @@ func main() {
 	}{
 		addr: "127.0.0.1:3478",
 	}
+	key := make([]byte, 16)
 
 	flags := flag.NewFlagSet(os.Args[0], flag.ExitOnError)
 	flags.StringVar(&cfg.addr, "addr", cfg.addr, "addr")
@@ -38,7 +39,7 @@ func main() {
 
 	errCh := make(chan error, 1)
 	go func(conn *net.UDPConn) {
-		errCh <- bindingRequest(ctx, conn)
+		errCh <- bindingRequest(ctx, conn, key)
 	}(conn)
 
 	select {
@@ -48,7 +49,7 @@ func main() {
 	}
 }
 
-func bindingRequest(ctx context.Context, conn *net.UDPConn) error {
+func bindingRequest(ctx context.Context, conn *net.UDPConn, key []byte) error {
 	var in [1280]byte
 	var txID stun.TxID
 
@@ -73,7 +74,7 @@ func bindingRequest(ctx context.Context, conn *net.UDPConn) error {
 		return err
 	}
 	var m stun.Message
-	if err := m.Unmarshal(in[:n:n]); err == nil {
+	if err := m.Unmarshal(in[:n:n], key); err == nil {
 		_ = m
 	}
 	return err

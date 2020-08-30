@@ -17,15 +17,12 @@ const (
 // @TODO Check for duplicate attributes appended?
 
 type Builder struct {
-	err              error
-	msg              []byte
-	messageIntegrity struct {
-		key []byte
-	}
-	messageIntegritySHA256 struct {
-		key []byte
-	}
-	addFingerprint bool
+	err error
+	msg []byte
+
+	messageIntegrityKey       []byte
+	messageIntegritySHA256Key []byte
+	addFingerprint            bool
 }
 
 func New(t Type, txID TxID) *Builder {
@@ -73,7 +70,6 @@ func (b *Builder) SetUserHash(username, realm string) {
 	if b.err != nil {
 		return
 	}
-	var buf [64]byte
 	if len(username) > maxUsernameByteLength {
 		b.err = ErrUsernameTooLong
 		return
@@ -82,7 +78,8 @@ func (b *Builder) SetUserHash(username, realm string) {
 		b.err = ErrRealmTooLong
 		return
 	}
-	data := append(buf[:0], username...)
+	// Try not to allocate and use unused capacity of b.msg
+	data := append(b.msg[len(b.msg):], username...)
 	data = append(data, ':')
 	data = append(data, realm...)
 	b.msg = appendUserHash(b.msg, sha256.Sum256(data))
@@ -93,7 +90,7 @@ func (b *Builder) AddMessageIntegrity(key []byte) {
 	if b.err != nil {
 		return
 	}
-	b.messageIntegrity.key = append(b.messageIntegrity.key[:0], key...)
+	b.messageIntegrityKey = append(b.messageIntegrityKey[:0], key...)
 }
 
 // AddLongTermMessageIntegrity
@@ -132,30 +129,19 @@ func (b *Builder) AddLongTermMessageIntegrity(passwordAlgorithm PasswordAlgorith
 	data = append(data, ':')
 	data = append(data, password...)
 	h.Write(data)
-	b.messageIntegrity.key = h.Sum(b.messageIntegrity.key[:0])
+	b.messageIntegrityKey = h.Sum(b.messageIntegrityKey[:0])
 }
 
-// SetMessageIntegritySHA256 appends a MessageIntegritySHA256 attribute.
-func (b *Builder) AddMessageIntegritySHA256(key []byte) {
-	b.AddMessageIntegritySHA256Truncated(key, sha256.Size)
-}
-
-// SetMessageIntegritySHA256Truncated appends an optionally truncated MessageIntegritySHA256 attribute.
-// length the length of the attribute should be between 16 and 32 inclusive, and be divisible by 4.
+// AddMessageIntegritySHA256 ensures a fingerprint attribute is added as the last attribute when message is built.
 // See https://tools.ietf.org/html/rfc8489#section-14.6
-func (b *Builder) AddMessageIntegritySHA256Truncated(key []byte, length int) {
+func (b *Builder) AddMessageIntegritySHA256(key []byte) {
 	if b.err != nil {
 		return
 	}
-	if length > sha256.Size || length < 16 || length%4 != 0 {
-		b.err = ErrInvalidMessageIntegritySHA256Length
-		return
-	}
-	b.messageIntegritySHA256.key = append(b.messageIntegritySHA256.key[:0], key...)
+	b.messageIntegritySHA256Key = append(b.messageIntegritySHA256Key[:0], key...)
 }
 
-// SetSoftware appends Software attribute to the STUN message.
-// Must be the last attribute appended to a STUN message.
+// AddFingerprint ensures a fingerprint attribute is added as the last attribute when message is built.
 // See https://tools.ietf.org/html/rfc8489#section-14.7
 func (b *Builder) AddFingerprint() {
 	b.addFingerprint = true
@@ -283,11 +269,11 @@ func (b *Builder) Build() ([]byte, error) {
 		return nil, b.err
 	}
 	m := b.msg
-	if len(b.messageIntegrity.key) != 0 {
-		m = appendMessageIntegrity(m, b.messageIntegrity.key)
+	if len(b.messageIntegrityKey) != 0 {
+		m = appendMessageIntegrity(m, b.messageIntegrityKey)
 	}
-	if len(b.messageIntegritySHA256.key) != 0 {
-		m = appendMessageIntegritySHA256(m, b.messageIntegritySHA256.key)
+	if len(b.messageIntegritySHA256Key) != 0 {
+		m = appendMessageIntegritySHA256(m, b.messageIntegritySHA256Key)
 	}
 	if b.addFingerprint {
 		m = appendFingerprint(m)

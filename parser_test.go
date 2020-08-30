@@ -23,17 +23,17 @@ func TestParseFingerprint(t *testing.T) {
 
 	var m Message
 
-	if err := m.Unmarshal(raw); err != nil {
+	if err := m.Unmarshal(raw, testKey); err != nil {
 		t.Fatalf("failed: %v", err)
 	}
 	raw[0] ^= 0x01
-	if err := m.Unmarshal(raw); err != ErrFingerprint {
+	if err := m.Unmarshal(raw, testKey); err != ErrFingerprint {
 		t.Fatal("expected ErrFingerprint error")
 	}
 	// Reset first byte and muggle last byte of header
 	raw[0] ^= 0x01
 	raw[headerSize-1] ^= 0x01
-	if err := m.Unmarshal(raw); err != ErrFingerprint {
+	if err := m.Unmarshal(raw, testKey); err != ErrFingerprint {
 		t.Fatal("expected ErrFingerprint error")
 	}
 }
@@ -41,7 +41,7 @@ func TestParseFingerprint(t *testing.T) {
 func TestParseMessageIntegrity(t *testing.T) {
 
 	b := New(TypeBindingRequest, txID)
-	b.AddMessageIntegrity(key)
+	b.AddMessageIntegrity(testKey)
 	raw, err := b.Build()
 	if err != nil {
 		t.Fatalf("build failed: %v", err)
@@ -49,47 +49,47 @@ func TestParseMessageIntegrity(t *testing.T) {
 
 	var m Message
 
-	if err := m.Unmarshal(raw); err != nil {
+	if err := m.Unmarshal(raw, testKey); err != nil {
 		t.Fatalf("failed: %v", err)
 	}
 	raw[0] ^= 0x01
-	if err := m.Unmarshal(raw); err != ErrMessageIntegrity {
+	if err := m.Unmarshal(raw, testKey); err != ErrMessageIntegrity {
 		t.Fatal("expected ErrMessageIntegrity error")
 	}
 	// Reset first byte and muggle last byte of header
 	raw[0] ^= 0x01
 	raw[headerSize-1] ^= 0x01
-	if err := m.Unmarshal(raw); err != ErrMessageIntegrity {
+	if err := m.Unmarshal(raw, testKey); err != ErrMessageIntegrity {
 		t.Fatal("expected ErrMessageIntegrity error")
 	}
 }
 
 func TestParseMessageIntegritySHA256(t *testing.T) {
 	b := New(TypeBindingRequest, txID)
-	b.AddMessageIntegritySHA256(key)
+	b.AddMessageIntegritySHA256(testKey)
 	raw, err := b.Build()
 	if err != nil {
 		t.Fatalf("build failed: %v", err)
 	}
 	var m Message
-	if err := m.Unmarshal(raw); err != nil {
+	if err := m.Unmarshal(raw, testKey); err != nil {
 		t.Fatalf("failed: %v", err)
 	}
 	raw[0] ^= 0x01
-	if err := m.Unmarshal(raw); err != ErrMessageIntegritySHA256 {
+	if err := m.Unmarshal(raw, testKey); err != ErrMessageIntegritySHA256 {
 		t.Fatal("expected ErrMessageIntegritySHA256 error")
 	}
 	// Reset first byte and muggle last byte of header
 	raw[0] ^= 0x01
 	raw[headerSize-1] ^= 0x01
-	if err := m.Unmarshal(raw); err != ErrMessageIntegritySHA256 {
+	if err := m.Unmarshal(raw, testKey); err != ErrMessageIntegritySHA256 {
 		t.Fatal("expected ErrMessageIntegritySHA256 error")
 	}
 }
 
 func TestParseMessageIntegritySHA256Fingerprint(t *testing.T) {
 	b := New(TypeBindingRequest, txID)
-	b.AddMessageIntegritySHA256(key)
+	b.AddMessageIntegritySHA256(testKey)
 	b.AddFingerprint()
 	raw, err := b.Build()
 	if err != nil {
@@ -98,17 +98,17 @@ func TestParseMessageIntegritySHA256Fingerprint(t *testing.T) {
 
 	var m Message
 
-	if err := m.Unmarshal(raw); err != nil {
+	if err := m.Unmarshal(raw, testKey); err != nil {
 		t.Fatalf("failed: %v", err)
 	}
 	raw[0] ^= 0x01
-	if err := m.Unmarshal(raw); err != ErrMessageIntegritySHA256 {
+	if err := m.Unmarshal(raw, testKey); err != ErrMessageIntegritySHA256 {
 		t.Fatal("expected messageintegritysha256 check failure")
 	}
 	// Reset first byte and muggle last byte of header
 	raw[0] ^= 0x01
 	raw[headerSize-1] ^= 0x01
-	if err := m.Unmarshal(raw); err != ErrMessageIntegritySHA256 {
+	if err := m.Unmarshal(raw, testKey); err != ErrMessageIntegritySHA256 {
 		t.Fatal("expected ErrMessageIntegritySHA256 error")
 	}
 }
@@ -116,25 +116,25 @@ func TestParseMessageIntegritySHA256Fingerprint(t *testing.T) {
 func TestParseMessageIntegrityFingerprintIsAllowed(t *testing.T) {
 	// Only attribute allowed after a MessageIntegrity is Fingerprint
 	raw := newHeader(nil, TypeBindingRequest, txID)
-	raw = appendMessageIntegrity(raw, key)
+	raw = appendMessageIntegrity(raw, testKey)
 	raw = appendFingerprint(raw)
 	setAttrSize(raw)
 
 	var m Message
 
-	if err := m.Unmarshal(raw); err != nil {
+	if err := m.Unmarshal(raw, testKey); err != nil {
 		t.Fatalf("allowed attribute sequence failed: %v", err)
 	}
 }
 func TestParseMessageIntegrityFollowedByMessageIntegrity256IsAllowed(t *testing.T) {
 	// MessageIntegrity followed by MessageIntegrity256 is allowed
 	raw := newHeader(nil, TypeBindingRequest, txID)
-	raw = appendMessageIntegrity(raw, key)
-	raw = appendMessageIntegritySHA256(raw, key)
+	raw = appendMessageIntegrity(raw, testKey)
+	raw = appendMessageIntegritySHA256(raw, testKey)
 	setAttrSize(raw)
 
 	var m Message
-	if err := m.Unmarshal(raw); err != nil {
+	if err := m.Unmarshal(raw, testKey); err != nil {
 		t.Fatalf("allowed attribute sequence failed: %v", err)
 	}
 }
@@ -142,12 +142,12 @@ func TestParseMessageIntegrityFollowedByMessageIntegrity256IsAllowed(t *testing.
 func TestParseMessageIntegrityShouldBeOnlyFollowedByFingerprint(t *testing.T) {
 	// Only attribute allowed after a MessageIntegrity is Fingerprint
 	raw := newHeader(nil, TypeBindingRequest, txID)
-	raw = appendMessageIntegrity(raw, key)
+	raw = appendMessageIntegrity(raw, testKey)
 	raw = appendSoftware(raw, "test")
 	setAttrSize(raw)
 
 	var m Message
-	if err := m.Unmarshal(raw); err != ErrInvalidAttributeSequence {
+	if err := m.Unmarshal(raw, testKey); err != ErrInvalidAttributeSequence {
 		t.Fatal("invalid attribute sequence did not cause expected invalid attribute sequence error")
 	}
 }
@@ -155,11 +155,11 @@ func TestParseMessageIntegrityShouldBeOnlyFollowedByFingerprint(t *testing.T) {
 func TestParseMessageIntegritySHA256ShouldBeOnlyFollowedByFingerprint(t *testing.T) {
 	// Only attribute allowed after a MessageIntegritySHA256 is Fingerprint
 	raw := newHeader(nil, TypeBindingRequest, txID)
-	raw = appendMessageIntegritySHA256(raw, key)
+	raw = appendMessageIntegritySHA256(raw, testKey)
 	raw = appendSoftware(raw, "test")
 	setAttrSize(raw)
 	var m Message
-	if err := m.Unmarshal(raw); err != ErrInvalidAttributeSequence {
+	if err := m.Unmarshal(raw, testKey); err != ErrInvalidAttributeSequence {
 		t.Fatal("invalid attribute sequence did not cause expected invalid attribute sequence error")
 	}
 }
@@ -168,55 +168,11 @@ func TestParseFingerprintShouldBeLastAttribute(t *testing.T) {
 	// Fingerprint should be last attribute
 	raw := newHeader(nil, TypeBindingRequest, txID)
 	raw = appendFingerprint(raw)
-	raw = appendMessageIntegritySHA256(raw, key)
+	raw = appendMessageIntegritySHA256(raw, testKey)
 	setAttrSize(raw)
 
 	var m Message
-	if err := m.Unmarshal(raw); err != ErrInvalidAttributeSequence {
+	if err := m.Unmarshal(raw, testKey); err != ErrInvalidAttributeSequence {
 		t.Fatalf("invalid attribute sequence did not cause expected invalid attribute sequence error")
-	}
-}
-
-func BenchmarkParseMessageFingerprint(b *testing.B) {
-	bb := New(TypeBindingRequest, txID)
-	bb.AddFingerprint()
-	raw, err := bb.Build()
-	if err != nil {
-		b.Fatalf("build failed: %v", err)
-	}
-	var m Message
-
-	b.ReportAllocs()
-	for i := 0; i < b.N; i++ {
-		_ = m.Unmarshal(raw)
-	}
-}
-
-func BenchmarkParseMessageIntegrity(b *testing.B) {
-	bb := New(TypeBindingRequest, txID)
-	bb.AddMessageIntegrity(key)
-	raw, err := bb.Build()
-	if err != nil {
-		b.Fatalf("build failed: %v", err)
-	}
-	var m Message
-
-	b.ReportAllocs()
-	for i := 0; i < b.N; i++ {
-		_ = m.Unmarshal(raw)
-	}
-}
-
-func BenchmarkParseMessageIntegritySHA256(b *testing.B) {
-	bb := New(TypeBindingRequest, txID)
-	bb.AddMessageIntegritySHA256(key)
-	raw, err := bb.Build()
-	if err != nil {
-		b.Fatalf("build failed: %v", err)
-	}
-	var m Message
-	b.ReportAllocs()
-	for i := 0; i < b.N; i++ {
-		_ = m.Unmarshal(raw)
 	}
 }

@@ -34,7 +34,7 @@ func (m *Message) Reset() {
 	}
 }
 
-func Serve(pc net.PacketConn) {
+func Serve(pc net.PacketConn, key []byte) {
 	buf := make([]byte, 4*1024)
 
 	var m Message
@@ -44,7 +44,7 @@ func Serve(pc net.PacketConn) {
 		if err != nil {
 			continue
 		}
-		if err := m.Unmarshal(buf[:n:n]); err != nil {
+		if err := m.Unmarshal(buf[:n], key); err != nil {
 			continue
 		}
 		switch m.Type() {

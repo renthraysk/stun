@@ -1,17 +1,49 @@
 package stun
 
 import (
+	"crypto/md5"
 	"crypto/sha1"
 	"crypto/sha256"
 	"encoding/binary"
+	"hash"
 )
+
+var colon = [1]byte{':'}
 
 func attributeType(a []byte) attr { return attr(binary.BigEndian.Uint16(a[:2])) }
 func attributeSize(a []byte) int  { return int(uint(binary.BigEndian.Uint16(a[2:4]))) }
 
-var key = []byte{31: 0}
+type KeyGenerator struct {
+	username, realm, password []byte
+	passwordAlgorithm         PasswordAlgorithm
+}
 
-func (m *Message) Unmarshal(in []byte) error {
+func (k *KeyGenerator) Generate() ([]byte, error) {
+	if len(k.realm) == 0 {
+		return k.password, nil
+	}
+	if len(k.username) == 0 {
+		return nil, ErrMissingUsername
+	}
+
+	var h hash.Hash
+
+	switch k.passwordAlgorithm {
+	case PasswordAlgorithmMD5:
+		h = md5.New()
+	case PasswordAlgorithmSHA256:
+		h = sha256.New()
+	}
+
+	h.Write(k.username)
+	h.Write(colon[:1])
+	h.Write(k.realm)
+	h.Write(colon[:1])
+	h.Write(k.password)
+	return h.Sum(nil), nil
+}
+
+func (m *Message) Unmarshal(in []byte, password []byte) error {
 
 	if len(in) < headerSize {
 		return ErrNotASTUNMessage
@@ -29,6 +61,8 @@ func (m *Message) Unmarshal(in []byte) error {
 		return ErrNotASTUNMessage
 	}
 
+	keyGen := KeyGenerator{passwordAlgorithm: PasswordAlgorithmMD5, password: password}
+
 	bytesParsed := headerSize
 	for attrs := in[headerSize:]; len(attrs) > 4; attrs = in[bytesParsed:] {
 		attrType, attrSize := attributeType(attrs), attributeSize(attrs)
@@ -38,6 +72,29 @@ func (m *Message) Unmarshal(in []byte) error {
 		}
 		switch attrType {
 
+		case attrUsername:
+			if len(attrValue) > maxUsernameByteLength {
+				return ErrUsernameTooLong
+			}
+			keyGen.username = attrValue[:attrSize]
+
+		case attrRealm:
+			if len(attrValue) > maxRealmByteLength {
+				return ErrRealmTooLong
+			}
+			keyGen.realm = attrValue[:attrSize]
+
+		case attrPasswordAlgorithm:
+			if len(attrValue) < 4 {
+				return ErrUnexpectedEOF
+			}
+			switch a := PasswordAlgorithm(binary.BigEndian.Uint16(attrValue[:2])); a {
+			case PasswordAlgorithmMD5, PasswordAlgorithmSHA256:
+				keyGen.passwordAlgorithm = a
+			default:
+				return ErrUnknownPasswordAlgorithm
+			}
+
 		case attrFingerprint:
 			if attrSize != 4 {
 				return ErrFingerprint
@@ -46,7 +103,7 @@ func (m *Message) Unmarshal(in []byte) error {
 			if len(attrValue) > 4 {
 				return ErrInvalidAttributeSequence
 			}
-			if !validateFingerprint(in[:bytesParsed], attrValue[:4]) {
+			if !validateFingerprint(in[:bytesParsed], binary.BigEndian.Uint32(attrValue)) {
 				return ErrFingerprint
 			}
 
@@ -64,6 +121,7 @@ func (m *Message) Unmarshal(in []byte) error {
 				case attrFingerprint:
 					// ignore everything after messageintegrity and fingerprint attributes
 					in = in[:bytesParsed+4+sha1.Size+fingerprintSize]
+
 				case attrMessageIntegritySHA256:
 					n := 4 + attributeSize(a)
 					if len(a) < n {
@@ -80,10 +138,16 @@ func (m *Message) Unmarshal(in []byte) error {
 					}
 					// ignore everything after messageintegritysha256 and fingerprint attributes
 					in = in[:bytesParsed+4+sha1.Size+n]
+
 				default:
 					return ErrInvalidAttributeSequence
 				}
 				attrValue = attrValue[:sha1.Size]
+			}
+
+			key, err := keyGen.Generate()
+			if err != nil {
+				return err
 			}
 			if !validateHMAC(in[:bytesParsed], attrValue, sha1.New, key) {
 				return ErrMessageIntegrity
@@ -103,12 +167,15 @@ func (m *Message) Unmarshal(in []byte) error {
 				in = in[:bytesParsed+4+attrSize+fingerprintSize]
 				attrValue = attrValue[:attrSize]
 			}
+			key, err := keyGen.Generate()
+			if err != nil {
+				return err
+			}
 			if !validateHMAC(in[:bytesParsed], attrValue, sha256.New, key) {
 				return ErrMessageIntegritySHA256
 			}
 		}
-		attrSize += 7 // 2 byte attr, 2 byte length, 3 for padding round up
-		bytesParsed += attrSize - (attrSize % 4)
+		bytesParsed += (attrSize + 7) & ^3
 	}
 
 	m.typ = Type(binary.BigEndian.Uint16(in[:2]))

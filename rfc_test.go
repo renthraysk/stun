@@ -2,8 +2,6 @@ package stun
 
 import (
 	"bytes"
-	"encoding/hex"
-	"os"
 	"testing"
 )
 
@@ -74,6 +72,13 @@ func TestRFC5769SampleRequest2_1(t *testing.T) {
 	if !bytes.Equal(expected, raw) {
 		t.Fatalf("failed build in occordance with RFC test vector")
 	}
+
+	var m Message
+
+	if err := m.Unmarshal(raw, []byte(password)); err != nil {
+		t.Fatalf("failed to unmarshal message: %v", err)
+	}
+
 }
 
 func TestRFC5769Sample2_4(t *testing.T) {
@@ -127,12 +132,12 @@ func TestRFC5769Sample2_4(t *testing.T) {
 		t.Fatalf("build failed: %v", err)
 	}
 	if !bytes.Equal(expected, raw) {
-
-		h := hex.Dumper(os.Stdout)
-		h.Write(raw)
-		h.Close()
-
 		t.Fatal("build generated different output")
+	}
 
+	var m Message
+
+	if err := m.Unmarshal(raw, []byte(password)); err != nil {
+		t.Fatalf("failed to unmarshal message: %v", err)
 	}
 }

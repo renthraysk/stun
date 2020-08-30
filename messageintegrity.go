@@ -21,10 +21,9 @@ func appendFingerprint(m []byte) []byte {
 
 // validateFingerprint is called when fingerprint attribute is encountered.
 // m slice spans the STUN message header plus all currently parsed attributes
-// a slice spans the fingerprint attribute
-func validateFingerprint(m []byte, a []byte) bool {
+func validateFingerprint(m []byte, crc uint32) bool {
 	// fingerprint attribute is always last so header size is correct
-	return crc32.ChecksumIEEE(m)^binary.BigEndian.Uint32(a) == fingerprintXor
+	return crc32.ChecksumIEEE(m)^crc == fingerprintXor
 }
 
 func appendHMAC(m []byte, a attr, h func() hash.Hash, key []byte) []byte {

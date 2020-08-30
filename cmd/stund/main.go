@@ -18,6 +18,8 @@ func main() {
 		addr: "127.0.0.1:3478",
 	}
 
+	key := make([]byte, 16)
+
 	flags := flag.NewFlagSet(os.Args[0], flag.ExitOnError)
 	flags.StringVar(&cfg.addr, "addr", cfg.addr, "addr")
 	flags.Parse(os.Args[1:])
@@ -29,6 +31,6 @@ func main() {
 
 	fmt.Fprintf(os.Stdout, "Listening on %s\n", pc.LocalAddr().String())
 
-	stun.Serve(pc)
+	stun.Serve(pc, key)
 
 }

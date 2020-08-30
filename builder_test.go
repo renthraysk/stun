@@ -41,7 +41,7 @@ func TestBuilderIPAddressLengthValidation(t *testing.T) {
 				t.Fatalf("build: expected error %v, got %v", tt.err, err)
 			}
 			if err == nil {
-				if err := m.Unmarshal(raw); err != nil {
+				if err := m.Unmarshal(raw, testKey); err != nil {
 					t.Fatalf("parse error: %v", err)
 				}
 			}
@@ -54,7 +54,7 @@ func TestBuilderIPAddressLengthValidation(t *testing.T) {
 				t.Fatalf("build: expected error %v, got %v", tt.err, err)
 			}
 			if err == nil {
-				if err := m.Unmarshal(raw); err != nil {
+				if err := m.Unmarshal(raw, testKey); err != nil {
 					t.Fatalf("parse error: %v", err)
 				}
 			}
@@ -67,7 +67,7 @@ func TestBuilderIPAddressLengthValidation(t *testing.T) {
 				t.Fatalf("build: expected error %v, got %v", tt.err, err)
 			}
 			if err == nil {
-				if err := m.Unmarshal(raw); err != nil {
+				if err := m.Unmarshal(raw, testKey); err != nil {
 					t.Fatalf("parse error: %v", err)
 				}
 			}
