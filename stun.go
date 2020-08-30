@@ -9,6 +9,8 @@ const (
 
 	magicCookie     uint32 = 0x2112A442
 	magicCookiePort uint16 = 0x2112
+
+	nonceSecurityFeaturesPrefix = "obMatJos2"
 )
 
 type Type uint16

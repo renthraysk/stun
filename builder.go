@@ -132,7 +132,7 @@ func (b *Builder) AddLongTermMessageIntegrity(passwordAlgorithm PasswordAlgorith
 	b.messageIntegrityKey = h.Sum(b.messageIntegrityKey[:0])
 }
 
-// AddMessageIntegritySHA256 ensures a fingerprint attribute is added as the last attribute when message is built.
+// AddMessageIntegritySHA256 ensures a messageintegritysha256 attribute is added as the last attribute when message is built.
 // See https://tools.ietf.org/html/rfc8489#section-14.6
 func (b *Builder) AddMessageIntegritySHA256(key []byte) {
 	if b.err != nil {
@@ -189,6 +189,19 @@ func (b *Builder) SetNonce(nonce []byte) {
 		return
 	}
 	b.msg = appendNonce(b.msg, nonce)
+}
+
+func (b *Builder) SetNonceWithSecurityFeatures(features Features, nonce []byte) {
+	const maxNonceByteLength = 763
+
+	if b.err != nil {
+		return
+	}
+	if len(nonce) > maxNonceByteLength {
+		b.err = ErrNonceTooLong
+		return
+	}
+	b.msg = appendNonceWithSecurityFeatures(b.msg, features, nonce)
 }
 
 // See https://tools.ietf.org/html/rfc8489#section-14.11

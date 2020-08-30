@@ -103,6 +103,31 @@ func appendNonce(m []byte, nonce []byte) []byte {
 	return appendAttribute(m, attrNonce, nonce)
 }
 
+type Features uint32
+
+const (
+	FeaturePasswordAlgorithms Features = 1 << 0
+	FeatureUserAnonyminity    Features = 1 << 1
+)
+
+func appendNonceWithSecurityFeatures(m []byte, features Features, nonce []byte) []byte {
+
+	const b64 = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
+
+	n := len(nonce) + len(nonceSecurityFeaturesPrefix) + 4
+	m = append(m, byte(attrNonce>>8), byte(attrNonce), byte(n>>8), byte(n))
+	m = append(m, nonceSecurityFeaturesPrefix...)
+
+	x := features
+	m = append(m, b64[(x>>18)%64], b64[(x>>12)%64], b64[(x>>6)%64], b64[x%64])
+	m = append(m, nonce...)
+
+	if i := n & 3; i != 0 {
+		return append(m, zeroPad[i:4]...)
+	}
+	return m
+}
+
 func appendUserHash(m []byte, userhash [sha256.Size]byte) []byte {
 	return appendAttribute(m, attrUserHash, userhash[:])
 }
