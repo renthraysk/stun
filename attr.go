@@ -174,6 +174,9 @@ func appendUnknownAttributes(m []byte, attributes []uint16) []byte {
 	for _, a := range attributes {
 		m = append(m, byte(a>>8), byte(a))
 	}
+	if i := n & 3; i != 0 {
+		m = append(m, zeroPad[i:4]...)
+	}
 	return m
 }
 
