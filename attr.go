@@ -63,7 +63,7 @@ func appendAttribute(m []byte, a attr, b []byte) []byte {
 	n := len(b)
 	m = append(m, byte(a>>8), byte(a), byte(n>>8), byte(n))
 	m = append(m, b...)
-	if i := n & 3; i != 0 {
+	if i := n % 4; i != 0 {
 		m = append(m, zeroPad[i:4]...)
 	}
 	return m
@@ -73,7 +73,7 @@ func appendAttributeString(m []byte, a attr, s string) []byte {
 	n := len(s)
 	m = append(m, byte(a>>8), byte(a), byte(n>>8), byte(n))
 	m = append(m, s...)
-	if i := n & 3; i != 0 {
+	if i := n % 4; i != 0 {
 		m = append(m, zeroPad[i:4]...)
 	}
 	return m
@@ -122,7 +122,7 @@ func appendNonceWithSecurityFeatures(m []byte, features Features, nonce []byte) 
 	m = append(m, b64[(x>>18)%64], b64[(x>>12)%64], b64[(x>>6)%64], b64[x%64])
 	m = append(m, nonce...)
 
-	if i := n & 3; i != 0 {
+	if i := n % 4; i != 0 {
 		return append(m, zeroPad[i:4]...)
 	}
 	return m
@@ -150,7 +150,7 @@ func appendErrorCode(m []byte, errorCode ErrorCode, reason string) []byte {
 	m = append(m, byte(attrErrorCode>>8), byte(attrErrorCode), byte(n>>8), byte(n),
 		0, 0, byte(errorCode>>8), byte(errorCode))
 	m = append(m, reason...)
-	if i := n & 3; i != 0 {
+	if i := n % 4; i != 0 {
 		m = append(m, zeroPad[i:4]...)
 	}
 	return m
@@ -162,7 +162,7 @@ func appendPasswordAlgorithm(m []byte, passwordAlgorithm PasswordAlgorithm, para
 	m = append(m, byte(attrPasswordAlgorithm>>8), byte(attrPasswordAlgorithm), byte(n>>8), byte(n),
 		byte(passwordAlgorithm>>8), byte(passwordAlgorithm), byte(p>>8), byte(p))
 	m = append(m, parameters...)
-	if i := n & 3; i != 0 {
+	if i := n % 4; i != 0 {
 		m = append(m, zeroPad[i:4]...)
 	}
 	return m
@@ -174,7 +174,7 @@ func appendUnknownAttributes(m []byte, attributes []uint16) []byte {
 	for _, a := range attributes {
 		m = append(m, byte(a>>8), byte(a))
 	}
-	if i := n & 3; i != 0 {
+	if i := n % 4; i != 0 {
 		m = append(m, zeroPad[i:4]...)
 	}
 	return m
@@ -188,8 +188,8 @@ func appendPriority(m []byte, typePref uint8, localPref uint16, componentID uint
 	return appendAttributeUint32(m, attrPriority, uint32(typePref)<<24|uint32(localPref)<<8|(256-uint32(componentID)))
 }
 
-func appendICEControlled(m []byte, r uint64) []byte {
-	return appendAttributeUint64(m, attrICEControlled, r)
+func appendICEControlled(m []byte, iceControlled uint64) []byte {
+	return appendAttributeUint64(m, attrICEControlled, iceControlled)
 }
 
 //
