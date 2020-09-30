@@ -1,10 +1,8 @@
 package stun
 
 import (
-	"crypto/md5"
 	"crypto/sha256"
 	"encoding/binary"
-	"hash"
 	"net"
 )
 
@@ -17,12 +15,12 @@ const (
 // @TODO Check for duplicate attributes appended?
 
 type Builder struct {
-	err error
-	msg []byte
-
-	messageIntegrityKey       []byte
-	messageIntegritySHA256Key []byte
-	addFingerprint            bool
+	err                          error
+	msg                          []byte
+	key                          []byte
+	messageIntegritySHA256Length int
+	messageIntegrity             bool
+	fingerprint                  bool
 }
 
 func New(t Type, txID TxID) *Builder {
@@ -78,73 +76,37 @@ func (b *Builder) SetUserHash(username, realm string) {
 		b.err = ErrRealmTooLong
 		return
 	}
-	// Try not to allocate and use unused capacity of b.msg
-	data := append(b.msg[len(b.msg):], username...)
-	data = append(data, ':')
-	data = append(data, realm...)
-	b.msg = appendUserHash(b.msg, sha256.Sum256(data))
+	b.msg = appendUserHash(b.msg, username, realm)
 }
 
 // See https://tools.ietf.org/html/rfc8489#section-14.5
-func (b *Builder) AddMessageIntegrity(key []byte) {
-	if b.err != nil {
-		return
-	}
-	b.messageIntegrityKey = append(b.messageIntegrityKey[:0], key...)
+func (b *Builder) AddMessageIntegrity() {
+	b.messageIntegrity = true
 }
 
-// AddLongTermMessageIntegrity
-// Will automatically add a PasswordAlgorithm attribute if passwordAlgorithm is anything other than PasswordAlgorithmMD5
-func (b *Builder) AddLongTermMessageIntegrity(passwordAlgorithm PasswordAlgorithm, username, realm, password string) {
-	if b.err != nil {
-		return
-	}
-	if len(username) > maxUsernameByteLength {
-		b.err = ErrUsernameTooLong
-		return
-	}
-	if len(realm) > maxRealmByteLength {
-		b.err = ErrRealmTooLong
-		return
-	}
-
-	var h hash.Hash
-	switch passwordAlgorithm {
-	case PasswordAlgorithmMD5:
-		h = md5.New()
-
-	case PasswordAlgorithmSHA256:
-		h = sha256.New()
-		b.msg = appendPasswordAlgorithm(b.msg, PasswordAlgorithmSHA256, nil)
-
-	default:
-		b.err = ErrUnknownPasswordAlgorithm
-		return
-	}
-
-	data := make([]byte, 0, len(username)+1+len(realm)+1+len(password))
-	data = append(data, username...)
-	data = append(data, ':')
-	data = append(data, realm...)
-	data = append(data, ':')
-	data = append(data, password...)
-	h.Write(data)
-	b.messageIntegrityKey = h.Sum(b.messageIntegrityKey[:0])
-}
-
-// AddMessageIntegritySHA256 ensures a messageintegritysha256 attribute is added as the last attribute when message is built.
+// AddMessageIntegritySHA256 ensures a messageintegritysha256 attribute is added when message is built.
 // See https://tools.ietf.org/html/rfc8489#section-14.6
-func (b *Builder) AddMessageIntegritySHA256(key []byte) {
+func (b *Builder) AddMessageIntegritySHA256() {
+	b.AddMessageIntegritySHA256Truncated(sha256.Size)
+}
+
+// AddMessageIntegritySHA256 ensures a messageintegritysha256 attribute is added when message is built.
+// The length allows for a truncated messageintegritysha256 value to be used, must be > 16 and divisible by 4.
+func (b *Builder) AddMessageIntegritySHA256Truncated(length int) {
 	if b.err != nil {
 		return
 	}
-	b.messageIntegritySHA256Key = append(b.messageIntegritySHA256Key[:0], key...)
+	if length > sha256.Size || length < 16 || length%4 != 0 {
+		b.err = ErrInvalidMessageIntegritySHA256Length
+		return
+	}
+	b.messageIntegritySHA256Length = length
 }
 
 // AddFingerprint ensures a fingerprint attribute is added as the last attribute when message is built.
 // See https://tools.ietf.org/html/rfc8489#section-14.7
 func (b *Builder) AddFingerprint() {
-	b.addFingerprint = true
+	b.fingerprint = true
 }
 
 // See https://tools.ietf.org/html/rfc8489#section-14.8
@@ -191,13 +153,15 @@ func (b *Builder) SetNonce(nonce []byte) {
 	b.msg = appendNonce(b.msg, nonce)
 }
 
+// See https://tools.ietf.org/html/rfc8489#section-14.10
+// & https://tools.ietf.org/html/rfc8489#section-9.2.1
 func (b *Builder) SetNonceWithSecurityFeatures(features Features, nonce []byte) {
 	const maxNonceByteLength = 763
 
 	if b.err != nil {
 		return
 	}
-	if len(nonce) > maxNonceByteLength {
+	if len(nonce) > maxNonceByteLength-len(nonceSecurityFeaturesPrefix)-4 {
 		b.err = ErrNonceTooLong
 		return
 	}
@@ -209,11 +173,14 @@ func (b *Builder) SetPasswordAlgorithms() {
 	// @TODO
 }
 
+// SetUnknownAttributes
+// Adds an Error Code attribute of ErrorCodeUnknownAttribute and with the given reason
 // See https://tools.ietf.org/html/rfc8489#section-14.13
-func (b *Builder) SetUnknownAttributes(attributes ...uint16) {
+func (b *Builder) SetUnknownAttributes(reason string, attributes ...uint16) {
 	if b.err != nil {
 		return
 	}
+	b.msg = appendErrorCode(b.msg, ErrorCodeUnknownAttribute, reason)
 	b.msg = appendUnknownAttributes(b.msg, attributes)
 }
 
@@ -269,11 +236,44 @@ func (b *Builder) SetPriority(typePref uint8, localPref uint16, componentID uint
 	b.msg = appendPriority(b.msg, typePref, localPref, componentID)
 }
 
-func (b *Builder) SetICEControlled(r uint64) {
+func (b *Builder) SetICEControlled(iceControlled uint64) {
 	if b.err != nil {
 		return
 	}
-	b.msg = appendICEControlled(b.msg, r)
+	b.msg = appendICEControlled(b.msg, iceControlled)
+}
+
+// SetKey sets the short term key used in computing the MessageIntegrity and MessageIntegritySHA256 attributes
+func (b *Builder) SetPassword(password string) {
+	if b.err != nil {
+		return
+	}
+	if len(b.key) > 0 {
+		b.err = ErrKeySet
+		return
+	}
+	b.key = append(b.key[:0], password...)
+}
+
+// SetKeyLongTerm sets the long term key used in computing the MessageIntegrity and MessageIntegritySHA256 attributes
+// Will automatically add PASSWORD-ALGORITHM attribute if passwordAlgorithm is anything other than PasswordAlgorithmMD5
+func (b *Builder) SetKeyLongTerm(passwordAlgorithm PasswordAlgorithm, username, realm, password string) {
+	if b.err != nil {
+		return
+	}
+	if len(b.key) > 0 {
+		b.err = ErrKeySet
+		return
+	}
+	switch passwordAlgorithm {
+	case PasswordAlgorithmMD5:
+		b.key = appendLongTermKeyMD5String(b.key[:0], username, realm, password)
+	case PasswordAlgorithmSHA256:
+		b.msg = appendPasswordAlgorithm(b.msg, PasswordAlgorithmSHA256, nil)
+		b.key = appendLongTermKeySHA256String(b.key[:0], username, realm, password)
+	default:
+		b.err = ErrUnknownPasswordAlgorithm
+	}
 }
 
 // Build return the raw STUN message or an error if one occurred during it's building.
@@ -282,13 +282,21 @@ func (b *Builder) Build() ([]byte, error) {
 		return nil, b.err
 	}
 	m := b.msg
-	if len(b.messageIntegrityKey) != 0 {
-		m = appendMessageIntegrity(m, b.messageIntegrityKey)
+	if b.messageIntegrity || b.messageIntegritySHA256Length > 0 {
+		if len(b.key) == 0 {
+			return nil, ErrMissingMessageIntegrityKey
+		}
+		if b.messageIntegrity {
+			m = appendMessageIntegrity(m, b.key)
+		}
+		if b.messageIntegritySHA256Length > 0 {
+			m = appendMessageIntegritySHA256(m, b.key, b.messageIntegritySHA256Length)
+		}
+	} else if len(b.key) > 0 {
+		// SetPassword() or SetLongTermKey() was called but neither MessageIntegrity or MessageIntegritySHA256 used.
+		return nil, ErrKeyNotUsed
 	}
-	if len(b.messageIntegritySHA256Key) != 0 {
-		m = appendMessageIntegritySHA256(m, b.messageIntegritySHA256Key)
-	}
-	if b.addFingerprint {
+	if b.fingerprint {
 		m = appendFingerprint(m)
 	}
 	binary.BigEndian.PutUint16(m[2:4], uint16(len(m)-headerSize))

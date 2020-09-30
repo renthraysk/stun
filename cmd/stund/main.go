@@ -18,7 +18,7 @@ func main() {
 		addr: "127.0.0.1:3478",
 	}
 
-	key := make([]byte, 16)
+	key := ""
 
 	flags := flag.NewFlagSet(os.Args[0], flag.ExitOnError)
 	flags.StringVar(&cfg.addr, "addr", cfg.addr, "addr")

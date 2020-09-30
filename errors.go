@@ -26,5 +26,11 @@ const (
 	ErrInvalidAttributeSequence            = errorString("invalid attribute sequence")
 	ErrInvalidMessageIntegritySHA256Length = errorString("invalid MessageIntegritySHA256 length")
 	ErrInvalidPriorityComponentID          = errorString("invalid priority component id")
-	ErrMessageAlreadyBuilt                 = errorString("message already built")
+	ErrInvalidUserHash                     = errorString("invalid user hash")
+	ErrMissingMessageIntegrityKey          = errorString("missing message integrity key")
+	ErrUnknownAddressAttribute             = errorString("unknown address attribute")
+	ErrUnknownIPFamily                     = errorString("unknown IP family")
+
+	ErrKeySet     = errorString("key already set previously")
+	ErrKeyNotUsed = errorString("key set but no messageintegrity or messageintegritysha256 attributes used")
 )

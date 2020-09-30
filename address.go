@@ -5,9 +5,6 @@ import (
 	"net"
 )
 
-const ErrUnknownAddressAttribute = errorString("unknown address attribute")
-const ErrUnknownIPFamily = errorString("unknown IP family")
-
 const (
 	iPv4Family = 0x01
 	iPv6Family = 0x02

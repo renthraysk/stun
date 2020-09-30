@@ -36,9 +36,10 @@ func (m *Message) Reset() {
 	}
 }
 
-func Serve(pc net.PacketConn, key []byte) {
+func Serve(pc net.PacketConn, password string) {
 	buf := make([]byte, 4*1024)
 
+	var p Parser
 	var m Message
 
 	for {
@@ -46,7 +47,7 @@ func Serve(pc net.PacketConn, key []byte) {
 		if err != nil {
 			continue
 		}
-		if err := m.Unmarshal(buf[:n], key); err != nil {
+		if err := p.Parse(&m, buf[:n:n]); err != nil {
 			continue
 		}
 		switch m.Type() {

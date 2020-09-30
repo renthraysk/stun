@@ -91,12 +91,12 @@ func appendUsername(m []byte, username string) []byte {
 	return appendAttributeString(m, attrUsername, username)
 }
 
-func appendSoftware(m []byte, s string) []byte {
-	return appendAttributeString(m, attrSoftware, s)
+func appendSoftware(m []byte, software string) []byte {
+	return appendAttributeString(m, attrSoftware, software)
 }
 
-func appendRealm(m []byte, r string) []byte {
-	return appendAttributeString(m, attrRealm, r)
+func appendRealm(m []byte, realm string) []byte {
+	return appendAttributeString(m, attrRealm, realm)
 }
 
 func appendNonce(m []byte, nonce []byte) []byte {
@@ -110,29 +110,32 @@ const (
 	FeatureUserAnonyminity    Features = 1 << 1
 )
 
-func appendNonceWithSecurityFeatures(m []byte, features Features, nonce []byte) []byte {
-
+func appendNonceWithSecurityFeatures(m []byte, f Features, nonce []byte) []byte {
 	const b64 = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
 
-	n := len(nonce) + len(nonceSecurityFeaturesPrefix) + 4
+	n := len(nonceSecurityFeaturesPrefix) + 4 + len(nonce)
 	m = append(m, byte(attrNonce>>8), byte(attrNonce), byte(n>>8), byte(n))
 	m = append(m, nonceSecurityFeaturesPrefix...)
-
-	x := features
-	m = append(m, b64[(x>>18)%64], b64[(x>>12)%64], b64[(x>>6)%64], b64[x%64])
+	m = append(m, b64[(f>>18)%64], b64[(f>>12)%64], b64[(f>>6)%64], b64[f%64])
 	m = append(m, nonce...)
-
 	if i := n % 4; i != 0 {
 		return append(m, zeroPad[i:4]...)
 	}
 	return m
 }
 
-func appendUserHash(m []byte, userhash [sha256.Size]byte) []byte {
-	return appendAttribute(m, attrUserHash, userhash[:])
+func appendUserHash(m []byte, username, realm string) []byte {
+	var buf [64]byte
+
+	h := sha256.New()
+	h.Write(append(buf[:0], username...))
+	buf[0] = ':'
+	h.Write(append(buf[:1], realm...))
+	m = append(m, byte(attrUserHash>>8), byte(attrUserHash), byte(sha256.Size>>8), byte(sha256.Size))
+	return h.Sum(m)
 }
 
-//go:generate stringer -type ErrorCode -trimprefix ErrorCode
+//NOT NEEDED go:generate stringer -type ErrorCode -trimprefix ErrorCode
 
 type ErrorCode uint16
 

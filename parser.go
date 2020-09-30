@@ -1,50 +1,80 @@
 package stun
 
 import (
-	"crypto/md5"
 	"crypto/sha1"
 	"crypto/sha256"
 	"encoding/binary"
-	"hash"
 )
-
-var colon = [1]byte{':'}
 
 func attributeType(a []byte) attr { return attr(binary.BigEndian.Uint16(a[:2])) }
 func attributeSize(a []byte) int  { return int(uint(binary.BigEndian.Uint16(a[2:4]))) }
 
-type KeyGenerator struct {
-	username, realm, password []byte
-	passwordAlgorithm         PasswordAlgorithm
+type keyGenerator struct {
+	password          string
+	username          []byte
+	realm             []byte
+	userHash          []byte
+	passwordAlgorithm PasswordAlgorithm
 }
 
-func (k *KeyGenerator) Generate() ([]byte, error) {
-	if len(k.realm) == 0 {
-		return k.password, nil
-	}
-	if len(k.username) == 0 {
-		return nil, ErrMissingUsername
-	}
+func (k *keyGenerator) GetPassword() ([]byte, error) {
+	return []byte{15: 0}, nil
+}
 
-	var h hash.Hash
+func (k *keyGenerator) GetPasswordByUserHash(userHash []byte) ([]byte, error) {
+	return []byte{15: 0}, nil
+}
 
+func (k *keyGenerator) GetPasswordUsernameRealm(username, realm []byte) ([]byte, error) {
+	return []byte{15: 0}, nil
+}
+
+func (k *keyGenerator) Generate(b []byte) ([]byte, error) {
+	var (
+		key []byte
+		err error
+	)
+
+	if len(k.userHash) != 0 {
+		key, err = k.GetPasswordByUserHash(k.userHash)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		if len(k.realm) == 0 {
+			return []byte(k.password), nil
+		}
+		if len(k.username) == 0 {
+			return nil, ErrMissingUsername
+		}
+		key, err = k.GetPasswordUsernameRealm(k.username, k.realm)
+		if err != nil {
+			return nil, err
+		}
+	}
 	switch k.passwordAlgorithm {
 	case PasswordAlgorithmMD5:
-		h = md5.New()
+		return appendLongTermKeyMD5(b, k.username, k.realm, key), nil
 	case PasswordAlgorithmSHA256:
-		h = sha256.New()
+		return appendLongTermKeySHA256(b, k.username, k.realm, key), nil
+	default:
+		return nil, ErrUnknownPasswordAlgorithm
 	}
-
-	h.Write(k.username)
-	h.Write(colon[:1])
-	h.Write(k.realm)
-	h.Write(colon[:1])
-	h.Write(k.password)
-	return h.Sum(nil), nil
 }
 
-func (m *Message) Unmarshal(in []byte, password []byte) error {
+type Parser struct {
+	key []byte
+}
 
+func NewParser() (*Parser, error) {
+	return &Parser{}, nil
+}
+
+func (p *Parser) SetPassword(password string) {
+	p.key = append(p.key[:0], password...)
+}
+
+func (p *Parser) Parse(dst *Message, in []byte) error {
 	if len(in) < headerSize {
 		return ErrNotASTUNMessage
 	}
@@ -52,16 +82,16 @@ func (m *Message) Unmarshal(in []byte, password []byte) error {
 	if in[0] > 0x3F {
 		return ErrNotASTUNMessage
 	}
-	// Magic Cookie
-	if binary.BigEndian.Uint32(in[4:8]) != magicCookie {
-		return ErrNotASTUNMessage
-	}
 	// Size (and should be multiple of 4)
 	if s := int(binary.BigEndian.Uint16(in[2:4])); s+headerSize != len(in) || s%4 != 0 {
 		return ErrNotASTUNMessage
 	}
+	// Magic Cookie
+	if binary.BigEndian.Uint32(in[4:8]) != magicCookie {
+		return ErrNotASTUNMessage
+	}
 
-	keyGen := KeyGenerator{passwordAlgorithm: PasswordAlgorithmMD5, password: password}
+	keyGen := keyGenerator{passwordAlgorithm: PasswordAlgorithmMD5}
 
 	bytesParsed := headerSize
 	for attrs := in[headerSize:]; len(attrs) > 4; attrs = in[bytesParsed:] {
@@ -73,19 +103,26 @@ func (m *Message) Unmarshal(in []byte, password []byte) error {
 		switch attrType {
 
 		case attrUsername:
-			if len(attrValue) > maxUsernameByteLength {
+			if attrSize > maxUsernameByteLength {
 				return ErrUsernameTooLong
 			}
 			keyGen.username = attrValue[:attrSize]
 
 		case attrRealm:
-			if len(attrValue) > maxRealmByteLength {
+			if attrSize > maxRealmByteLength {
 				return ErrRealmTooLong
 			}
 			keyGen.realm = attrValue[:attrSize]
 
+		case attrNonce:
+			if attrSize < len(nonceSecurityFeaturesPrefix)+4 ||
+				string(attrValue[:len(nonceSecurityFeaturesPrefix)]) != nonceSecurityFeaturesPrefix {
+				break
+			}
+			// @TODO base64 decode security feature bits?
+
 		case attrPasswordAlgorithm:
-			if len(attrValue) < 4 {
+			if attrSize < 4 {
 				return ErrUnexpectedEOF
 			}
 			switch a := PasswordAlgorithm(binary.BigEndian.Uint16(attrValue[:2])); a {
@@ -95,17 +132,11 @@ func (m *Message) Unmarshal(in []byte, password []byte) error {
 				return ErrUnknownPasswordAlgorithm
 			}
 
-		case attrFingerprint:
-			if attrSize != 4 {
-				return ErrFingerprint
+		case attrUserHash:
+			if attrSize != sha256.Size {
+				return ErrInvalidUserHash
 			}
-			// fingerprint must be the last attribute, len(attrValue) > 4 provides that condition
-			if len(attrValue) > 4 {
-				return ErrInvalidAttributeSequence
-			}
-			if !validateFingerprint(in[:bytesParsed], binary.BigEndian.Uint32(attrValue)) {
-				return ErrFingerprint
-			}
+			keyGen.userHash = attrValue[:sha256.Size]
 
 		case attrMessageIntegrity:
 			if attrSize != sha1.Size {
@@ -145,11 +176,7 @@ func (m *Message) Unmarshal(in []byte, password []byte) error {
 				attrValue = attrValue[:sha1.Size]
 			}
 
-			key, err := keyGen.Generate()
-			if err != nil {
-				return err
-			}
-			if !validateHMAC(in[:bytesParsed], attrValue, sha1.New, key) {
+			if !validateHMACSHA1(in[:bytesParsed], attrValue, keyGen) {
 				return ErrMessageIntegrity
 			}
 
@@ -167,19 +194,27 @@ func (m *Message) Unmarshal(in []byte, password []byte) error {
 				in = in[:bytesParsed+4+attrSize+fingerprintSize]
 				attrValue = attrValue[:attrSize]
 			}
-			key, err := keyGen.Generate()
-			if err != nil {
-				return err
-			}
-			if !validateHMAC(in[:bytesParsed], attrValue, sha256.New, key) {
+			if !validateHMACSHA256(in[:bytesParsed], attrValue, keyGen) {
 				return ErrMessageIntegritySHA256
+			}
+
+		case attrFingerprint:
+			if attrSize != 4 {
+				return ErrFingerprint
+			}
+			// fingerprint must be the last attribute, len(attrValue) > 4 provides that condition
+			if len(attrValue) > 4 {
+				return ErrInvalidAttributeSequence
+			}
+			if !validateFingerprint(in[:bytesParsed], binary.BigEndian.Uint32(attrValue)) {
+				return ErrFingerprint
 			}
 		}
 		bytesParsed += (attrSize + 7) & ^3
 	}
 
-	m.typ = Type(binary.BigEndian.Uint16(in[:2]))
-	copy(m.txID[:], in[8:])
+	dst.typ = Type(binary.BigEndian.Uint16(in[:2]))
+	copy(dst.txID[:], in[8:])
 
 	return nil
 }

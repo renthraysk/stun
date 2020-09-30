@@ -5,13 +5,16 @@ import (
 	"testing"
 )
 
+const testPassword = "testpassword"
+
 var testTxID TxID
-var testKey = []byte{16: 0}
+var testKey = []byte(testPassword)
 
 func TestBuilderMessageIntegrityMessageIntegritySHA256Fingerprint(t *testing.T) {
 	b := New(TypeBindingRequest, testTxID)
-	b.AddMessageIntegrity(testKey)
-	b.AddMessageIntegritySHA256(testKey)
+	b.AddMessageIntegrity()
+	b.SetPassword(testPassword)
+	b.AddMessageIntegritySHA256()
 	b.AddFingerprint()
 	if _, err := b.Build(); err != nil {
 		t.Fatalf("expected no error got %v", err)
@@ -30,6 +33,7 @@ func TestBuilderIPAddressLengthValidation(t *testing.T) {
 		{ip: net.IP{0xFF, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1}, err: ErrInvalidIPAddress},
 	}
 
+	var p Parser
 	var m Message
 
 	for _, tt := range tests {
@@ -41,7 +45,7 @@ func TestBuilderIPAddressLengthValidation(t *testing.T) {
 				t.Fatalf("build: expected error %v, got %v", tt.err, err)
 			}
 			if err == nil {
-				if err := m.Unmarshal(raw, testKey); err != nil {
+				if err := p.Parse(&m, raw); err != nil {
 					t.Fatalf("parse error: %v", err)
 				}
 			}
@@ -54,7 +58,7 @@ func TestBuilderIPAddressLengthValidation(t *testing.T) {
 				t.Fatalf("build: expected error %v, got %v", tt.err, err)
 			}
 			if err == nil {
-				if err := m.Unmarshal(raw, testKey); err != nil {
+				if err := p.Parse(&m, raw); err != nil {
 					t.Fatalf("parse error: %v", err)
 				}
 			}
@@ -67,7 +71,7 @@ func TestBuilderIPAddressLengthValidation(t *testing.T) {
 				t.Fatalf("build: expected error %v, got %v", tt.err, err)
 			}
 			if err == nil {
-				if err := m.Unmarshal(raw, testKey); err != nil {
+				if err := p.Parse(&m, raw); err != nil {
 					t.Fatalf("parse error: %v", err)
 				}
 			}
