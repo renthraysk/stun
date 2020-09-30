@@ -9,7 +9,10 @@ func TestRFC8489TestVectorB1_Errata(t *testing.T) {
 	const username = "\u30DE\u30C8\u30EA\u30C3\u30AF\u30B9"
 	const realm = "example.org"
 	const password = "TheMatrIX"
-	const nonce = "f//499k954d6OL34oL9FSTvy64sA" // nonce without security features
+
+	// nonce has the security features prefix and encoded security features removed
+	// as these will be specified separately and prefixed onto the nonce value.
+	const nonce = "f//499k954d6OL34oL9FSTvy64sA"
 
 	txID := TxID{0x78, 0xad, 0x34, 0x33,
 		0xc6, 0xad, 0x72, 0xc0,
@@ -46,8 +49,8 @@ func TestRFC8489TestVectorB1_Errata(t *testing.T) {
 		0x65, 0x78, 0x61, 0x6d, // }
 		0x70, 0x6c, 0x65, 0x2e, // }  Realm value (0x11,  bytes) and padding (1 byte)
 		0x6f, 0x72, 0x67, 0x00, // }
-		0x00, 0x1D, 0x00, 0x04, //    PASSWORD-ALGORITHM attribute header
-		0x00, 0x02, 0x00, 0x00, //    PASSWORD-ALGORITHM SHA-256 (0x0002)
+		0x00, 0x1d, 0x00, 0x04, //    PASSWORD-ALGORITHM attribute header
+		0x00, 0x02, 0x00, 0x00, //    PASSWORD-ALGORITHM value, SHA-256 (0x0002), and parameters length, 0.
 		0x00, 0x1c, 0x00, 0x20, //    MESSAGE-INTEGRITY-SHA256 attribute header
 		0xb5, 0xc7, 0xbf, 0x00, // }
 		0x5b, 0x6c, 0x52, 0xa2, // }
