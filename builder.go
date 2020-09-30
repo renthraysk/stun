@@ -243,7 +243,7 @@ func (b *Builder) SetICEControlled(iceControlled uint64) {
 	b.msg = appendICEControlled(b.msg, iceControlled)
 }
 
-// SetKey sets the short term key used in computing the MessageIntegrity and MessageIntegritySHA256 attributes
+// SetPassword sets the short term key used in computing the MessageIntegrity and MessageIntegritySHA256 attributes
 func (b *Builder) SetPassword(password string) {
 	if b.err != nil {
 		return
